@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  rhsensowebapi:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5000:80"
+      - "5001:443"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ASPNETCORE_URLS=http://+:80
+      - ConnectionStrings__Default=Server=sqlserver;Database=RhSensoWebApi;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=true;MultipleActiveResultSets=true
+      - ConnectionStrings__Redis=redis:6379
+      - JWT__Key=your-super-secret-jwt-key-that-should-be-at-least-256-bits-long-for-security-production
+      - JWT__Issuer=RhSensoWebApi
+      - JWT__Audience=RhSensoWebApi-Clients
+      - JWT__ExpiryMinutes=60
+    depends_on:
+      - sqlserver
+      - redis
+    volumes:
+      - ./logs:/app/logs
+    networks:
+      - rhsensowebapi-network
+
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - ACCEPT_EULA=Y
+      - SA_PASSWORD=YourStrong@Passw0rd
+      - MSSQL_PID=Express
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+    networks:
+      - rhsensowebapi-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - rhsensowebapi-network
+
+volumes:
+  sqlserver_data:
+  redis_data:
+
+networks:
+  rhsensowebapi-network:
+    driver: bridge
+

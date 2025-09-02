@@ -1,0 +1,53 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{8BB2717D-0F32-4D99-AA43-2C73E5A5E67E}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{E5C7D90D-1F9F-4481-860B-F03D6C7F1E4C}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RhSensoWebApi.API", "src\API\RhSensoWebApi.API.csproj", "{C6C6DB37-93C4-4F26-A5F6-40C11DF0FA68}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RhSensoWebApi.Core", "src\Core\RhSensoWebApi.Core.csproj", "{4C26868E-5E7C-4572-8BA8-15D8D5618F6E}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RhSensoWebApi.Infrastructure", "src\Infrastructure\RhSensoWebApi.Infrastructure.csproj", "{8EF8C4DB-43F6-4D2C-A834-4CC5A56AD1EE}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RhSensoWebApi.Tests", "tests\RhSensoWebApi.Tests\RhSensoWebApi.Tests.csproj", "{91B69ED5-4F3C-4930-8BA8-1651C9A02581}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C6C6DB37-93C4-4F26-A5F6-40C11DF0FA68}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C6C6DB37-93C4-4F26-A5F6-40C11DF0FA68}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C6C6DB37-93C4-4F26-A5F6-40C11DF0FA68}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C6C6DB37-93C4-4F26-A5F6-40C11DF0FA68}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4C26868E-5E7C-4572-8BA8-15D8D5618F6E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4C26868E-5E7C-4572-8BA8-15D8D5618F6E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4C26868E-5E7C-4572-8BA8-15D8D5618F6E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4C26868E-5E7C-4572-8BA8-15D8D5618F6E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8EF8C4DB-43F6-4D2C-A834-4CC5A56AD1EE}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8EF8C4DB-43F6-4D2C-A834-4CC5A56AD1EE}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8EF8C4DB-43F6-4D2C-A834-4CC5A56AD1EE}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8EF8C4DB-43F6-4D2C-A834-4CC5A56AD1EE}.Release|Any CPU.Build.0 = Release|Any CPU
+		{91B69ED5-4F3C-4930-8BA8-1651C9A02581}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{91B69ED5-4F3C-4930-8BA8-1651C9A02581}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{91B69ED5-4F3C-4930-8BA8-1651C9A02581}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{91B69ED5-4F3C-4930-8BA8-1651C9A02581}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{C6C6DB37-93C4-4F26-A5F6-40C11DF0FA68} = {8BB2717D-0F32-4D99-AA43-2C73E5A5E67E}
+		{4C26868E-5E7C-4572-8BA8-15D8D5618F6E} = {8BB2717D-0F32-4D99-AA43-2C73E5A5E67E}
+		{8EF8C4DB-43F6-4D2C-A834-4CC5A56AD1EE} = {8BB2717D-0F32-4D99-AA43-2C73E5A5E67E}
+		{91B69ED5-4F3C-4930-8BA8-1651C9A02581} = {E5C7D90D-1F9F-4481-860B-F03D6C7F1E4C}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {0181FAD0-E2DF-4C53-A5F4-1B76B4014982}
+	EndGlobalSection
+EndGlobal
+

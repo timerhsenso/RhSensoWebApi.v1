@@ -1,0 +1,303 @@
+0) Padrões de Resposta e Erros (uniformização)
+
+Por quê: experiência consistente para clientes; facilita diagnósticos e testes.
+
+ Padronizar BaseResponse<T> (sucesso, mensagem, erros, payload) e usar em 100% das actions.
+
+ Mapear exceções → HTTP status no ExceptionHandlingMiddleware:
+
+ValidationException → 400 (com dicionário de erros)
+
+UnauthorizedAccessException → 401
+
+ForbiddenException → 403
+
+NotFoundException → 404
+
+ConcurrencyException/DbUpdateException → 409/500 (avaliar)
+
+ Formato de erro único: { traceId, message, errors? } (traceId via Correlation ID).
+
+DoD: endpoints antigos migrados; testes cobrindo pelo menos 1 caso por status.
+
+1) Segurança de Produção (CORS/HTTPS/JWT/Segredos)
+
+Por quê: reduzir superfície de ataque; práticas mínimas de produção.
+
+ CORS nomeado e restrito a domínios do front (configurável por ambiente).
+
+ RequireHttpsMetadata = true (desligar só em Development).
+
+ Remover segredos do appsettings.json:
+
+ConnectionString/JWT Key via User Secrets (dev) e variáveis de ambiente/KeyVault (prod).
+
+ HSTS habilitado em produção.
+
+DoD: não há AllowAnyOrigin em Production; Key/ConnectionString não comitadas.
+
+2) Rate Limiting e Anti-Abuso
+
+Por quê: proteger endpoints sensíveis (login) e estabilidade geral.
+
+ RateLimiter global com política “login” (ex.: 5 req/min).
+
+ Aplicar atributo/política explicitamente em POST /login.
+
+ Logar violações (sem vazar dados).
+
+DoD: testes cobrindo excedente de requisições; headers de rate limit presentes (se aplicável).
+
+3) Eliminar Duplicações de DTOs (fonte única de verdade)
+
+Por quê: reduzir acoplamento e erros; reuso entre camadas.
+
+ Manter DTOs no Core (BaseResponse, LoginRequest/Response, PermissionDto, etc.).
+
+ Remover cópias em API/DTOs; ajustar using nos controllers.
+
+DoD: build limpo; grep por nomes duplicados retorna zero.
+
+4) Validação de Entrada (FluentValidation)
+
+Por quê: regras claras, reutilizáveis, testáveis, sem poluir controllers.
+
+ Adicionar FluentValidation e validadores por DTO (ex.: LoginRequestValidator).
+
+ Pipeline automático: falha de validação → 400 com errors padronizado.
+
+DoD: ao menos 3 validadores implementados + testes.
+
+5) Versionamento de API (Asp.Versioning)
+
+Por quê: evolução sem quebrar clientes.
+
+ Adicionar Asp.Versioning e ApiExplorer.
+
+ Rota: api/v{version:apiVersion}/... e [ApiVersion("1.0")].
+
+ Swagger dividido por versão.
+
+DoD: endpoints servidos em v1; documentação segregada por versão.
+
+6) Swagger Profissional (contrato claro)
+
+Por quê: DX (dev experience) e comunicação.
+
+ Ativar XML docs (csproj GenerateDocumentationFile).
+
+ SecurityDefinition Bearer + requirement global.
+
+ Annotations (OperationId, resumo, responses).
+
+DoD: Swagger exibe descrições, códigos de retorno e modelos; “Authorize” funcional.
+
+7) Observabilidade (Correlation ID, Logs, Tracing)
+
+Por quê: rastreamento de problemas multi-serviço.
+
+ Middleware CorrelationId: gera/propaga X-Correlation-ID.
+
+ Enrich Serilog com FromLogContext() + CorrelationId.
+
+ (Opcional) OpenTelemetry (traces/metrics) com export para OTLP/Jaeger.
+
+DoD: cada resposta inclui X-Correlation-ID; logs contêm o ID.
+
+8) Padrão de Paginação / Ordenação / Filtros
+
+Por quê: padronizar endpoints de listagem; reuso no front.
+
+ Contrato: ?page=1&pageSize=50&sort=field:asc,other:desc&filter=....
+
+ PagedResponse<T> + header X-Pagination (total, page, pageSize).
+
+ Helper (aplicável em qualquer IQueryable): ApplyPaging/ApplySorting/ApplyFilter.
+
+DoD: 1 endpoint de exemplo migrado; testes garantindo ordenação/limites.
+
+9) Cache com Política Clara (IMemory/Distributed)
+
+Por quê: desempenho consistente; evitar bugs por cache “solto”.
+
+ Interface ICacheService unificada (get/set/remove, TTL opcional).
+
+ Políticas nomeadas (ex.: Auth:Permissions:{userId}, TTL 5–15 min).
+
+ Invalidação em eventos relevantes (troca de grupo/perfis).
+
+DoD: testes de cache hit/miss e invalidação.
+
+10) Autenticação / Autorização (claims e tamanho do token)
+
+Por quê: evitar JWT “gigante”, manter reuso.
+
+ Compactar claims de permissão (ex.: roles + lookup via cache/DB quando necessário).
+
+ Documentar formato da claim de permissões (público interno).
+
+ Middleware/Handler reutilizável: [HasPermission("SIS:FUNC:ACAO")].
+
+DoD: 1 policy de permissão aplicada; token <= limite seguro (ex.: < 4 KB).
+
+11) Camada de Repositório/Serviço — Reuso Real
+
+Por quê: DRY; evitar “CRUD por copiar/colar”.
+
+ IRepository<T> e Repository<T> genérico (Add, Get, Update, Delete, Exists, Any, FirstOrDefault, ListAsync com spec).
+
+ Specification Pattern para filtros/ordens reutilizáveis.
+
+ ICrudService<TDto, TCreate, TUpdate> + CrudService<T,...> base.
+
+DoD: 1 entidade migrada p/ base genérica; dif reduz código ≥ 30%.
+
+12) Testes Automatizados (Unidade/Integração)
+
+Por quê: confiança nas mudanças e reuso de padrões.
+
+ Testes de serviço (Auth, Permissões, Cache).
+
+ Testes de controller com WebApplicationFactory.
+
+ Cenários de erro (401/403/404/422/429/500).
+
+DoD: cobertura mínima 60% nos projetos Core/API; pipeline CI rodando testes.
+
+13) Pipeline de Build/Release (CI/CD mínimo saudável)
+
+Por quê: repetibilidade e qualidade.
+
+ GitHub Actions/Azure DevOps com:
+
+build + testes
+
+dotnet format --verify-no-changes
+
+análise estática (ex.: Roslyn analyzers)
+
+ Publicação por ambiente (artifact versionado).
+
+DoD: ao abrir PR, pipeline executa e bloqueia merge em caso de falha.
+
+14) Qualidade de Código (Analisadores e Layout)
+
+Por quê: manter padrão de “código sênior”.
+
+ Ativar nullable enable e treat warnings as errors (gradual).
+
+ EditorConfig com regras (estilo, import global, var vs tipo).
+
+ Roslyn analyzers (CA*), StyleCop (se compatível com time).
+
+DoD: solução compila sem warnings críticos; padrão consistente.
+
+15) Documentação Operacional (dev & ops)
+
+Por quê: onboard rápido e operação previsível.
+
+ README.md com:
+
+Setup local (dotnet, secrets, DB)
+
+Execução (profiles, HTTPS dev)
+
+Variáveis de ambiente
+
+Fluxo de release
+
+ SECURITY.md com mínimos de produção (CORS, HSTS, secrets, logs).
+
+ CONTRIBUTING.md (branching, commits, code review).
+
+DoD: novos devs sobem o projeto em <15 min seguindo o guia.
+
+16) Endpoints de Saúde e Ready/Live (Ops)
+
+Por quê: monitoramento e orquestração.
+
+ /health com DbContextCheck.
+
+ (Opcional) /ready e /live separados.
+
+DoD: ferramentas (K8s/NGINX) podem consultar sem autenticação.
+
+17) Migração Controlada de Configurações
+
+Por quê: consistência entre ambients.
+
+ appsettings.{Environment}.json mínimos.
+
+ Preferir env vars para secretos e URLs sensíveis.
+
+ Mapeamento de config → Options (IOptions<T>).
+
+DoD: não há magic strings de config no código.
+
+18) Logs Úteis (sem dados sensíveis)
+
+Por quê: diagnósticos sem risco.
+
+ Mascarar PII e nunca logar senha/refresh token.
+
+ Níveis adequados (Information para eventos, Debug para dev, Warning/Error para falhas).
+
+ Template de mensagem consistente (com correlation id).
+
+DoD: revisão de pontos de log críticos; amostras aprovadas.
+
+19) Guidelines de Branch e Versionamento Semântico
+
+Por quê: previsibilidade e release claro.
+
+ Branches: main (prod), develop (integração), feature/*.
+
+ SemVer: MAJOR.MINOR.PATCH; tag por release.
+
+DoD: PR template e política de merge definidos.
+
+20) Roadmap de Extensão (sem implementar agora)
+
+Por quê: orientar evolução com reuso.
+
+ Refresh Tokens assincrônicos (revogação/rotacionamento).
+
+ RBAC + ABAC: combinar regras com claims/contexto.
+
+ Feature Flags para rollout seguro.
+
+ Idempotência em endpoints críticos (chave idempotente).
+
+DoD: somente documentado; sem código agora.
+
+Sequenciamento Sugerido (lotes curtos e seguros)
+
+Segurança base: (0, 1, 2, 3)
+
+DevX/Contrato: (4, 5, 6)
+
+Observabilidade & Padrões de lista: (7, 8, 9)
+
+Autorização & Reuso CRUD/Repo: (10, 11)
+
+Qualidade & Automação: (12, 13, 14)
+
+Ops & Docs: (15, 16, 17, 18, 19)
+
+Roadmap: (20)
+
+Definição Geral de Pronto (DoD)
+
+Build limpo sem warnings críticos.
+
+Testes passando no CI.
+
+Segurança mínima aplicada (CORS restrito, HTTPS, segredos fora do repo).
+
+Swagger atualizado e navegável.
+
+Logs com Correlation ID e sem dados sensíveis.
+
+Documentação atualizada (README/SECURITY/CONTRIBUTING).
+
+Revisão por pares feita e aprovada.
