@@ -17,6 +17,8 @@ using RhSensoWebApi.Infrastructure.Services;
 using RhSensoWebApi.Infrastructure.Data.Repositories;
 using RhSensoWebApi.Infrastructure.Cache;
 
+using Microsoft.Extensions.Logging; // <— precisa deste using
+
 // Middlewares próprios
 using RhSensoWebApi.API.Middleware;
 
@@ -92,19 +94,15 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 {
     options.UseSqlServer(builder.Configuration.GetConnectionString("Default"));
 
-    // Loga as queries SQL no nível Information
-    //options.LogTo(Console.WriteLine, LogLevel.Information);
+    // 1) Liga o log de SQL (vai para o console e Serilog captura)
+    options.LogTo(Console.WriteLine, LogLevel.Information);
 
-    options.LogTo(
-    log => Serilog.Log.Information(log),
-    LogLevel.Information
-);
-
-
-    // Opcional: loga parâmetros
-    options.EnableSensitiveDataLogging();
+    // 2) (DEV apenas!) Loga parâmetros (pode expor senha/token)
+    if (builder.Environment.IsDevelopment())
+    {
+        options.EnableSensitiveDataLogging();
+    }
 });
-
 
 // Cache (Memória + opcional Redis)
 builder.Services.AddMemoryCache();
