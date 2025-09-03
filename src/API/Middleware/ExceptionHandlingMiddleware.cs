@@ -3,13 +3,10 @@ using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
-using RhSensoWebApi.Core.Common.Exceptions; // BaseResponse<T>, ErrorDto e Exceptions
+using RhSensoWebApi.Core.Common.Exceptions;
 
 namespace RhSensoWebApi.API.Middleware
 {
-    /// <summary>
-    /// Captura exceções e retorna BaseResponse<object> com status coerente.
-    /// </summary>
     public class ExceptionHandlingMiddleware
     {
         private readonly RequestDelegate _next;
@@ -36,7 +33,7 @@ namespace RhSensoWebApi.API.Middleware
         private static async Task HandleExceptionAsync(HttpContext ctx, Exception ex, ILogger logger)
         {
             var traceId = ctx.TraceIdentifier;
-            var (status, message, code) = MapException(ex);
+            var (status, message, code, errors) = MapException(ex);
 
             logger.LogError(ex, "Unhandled exception. Status: {StatusCode} TraceId: {TraceId} Msg: {Message}",
                 (int)status, traceId, message);
@@ -47,11 +44,10 @@ namespace RhSensoWebApi.API.Middleware
             var payload = new BaseResponse<object>
             {
                 Success = false,
-                Error = new ErrorDto
-                {
-                    Code = code,
-                    Message = message
-                }
+                Message = message,
+                Error = new ErrorDto { Code = code, Message = message },
+                Errors = errors,
+                TraceId = traceId
             };
 
             var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions
@@ -63,19 +59,27 @@ namespace RhSensoWebApi.API.Middleware
             await ctx.Response.WriteAsync(json);
         }
 
-        private static (HttpStatusCode status, string message, string code) MapException(Exception ex)
+        private static (HttpStatusCode status, string message, string code, IDictionary<string, string[]>? errors) MapException(Exception ex)
         {
-            return ex switch
+            switch (ex)
             {
-                ValidationException vex              => (HttpStatusCode.BadRequest, vex.Message, nameof(HttpStatusCode.BadRequest)),
-                UnauthorizedAccessException uex      => (HttpStatusCode.Unauthorized, uex.Message, nameof(HttpStatusCode.Unauthorized)),
-                ForbiddenException fex               => (HttpStatusCode.Forbidden, fex.Message, nameof(HttpStatusCode.Forbidden)),
-                NotFoundException nex                => (HttpStatusCode.NotFound, nex.Message, nameof(HttpStatusCode.NotFound)),
-                ConcurrencyException cex             => (HttpStatusCode.Conflict, cex.Message, nameof(HttpStatusCode.Conflict)),
-                DbUpdateConcurrencyException         => (HttpStatusCode.Conflict, "Conflito de concorrência no banco de dados.", nameof(HttpStatusCode.Conflict)),
-                DbUpdateException                    => (HttpStatusCode.BadRequest, "Falha ao persistir alterações no banco de dados.", nameof(HttpStatusCode.BadRequest)),
-                _                                    => (HttpStatusCode.InternalServerError, "Erro interno do servidor.", nameof(HttpStatusCode.InternalServerError))
-            };
+                case ValidationException vex:
+                    return (HttpStatusCode.BadRequest, "Falha de validação.", nameof(HttpStatusCode.BadRequest), vex.Errors);
+                case UnauthorizedAccessException uex:
+                    return (HttpStatusCode.Unauthorized, string.IsNullOrWhiteSpace(uex.Message) ? "Não autorizado." : uex.Message, nameof(HttpStatusCode.Unauthorized), null);
+                case ForbiddenException fex:
+                    return (HttpStatusCode.Forbidden, string.IsNullOrWhiteSpace(fex.Message) ? "Acesso proibido." : fex.Message, nameof(HttpStatusCode.Forbidden), null);
+                case NotFoundException nex:
+                    return (HttpStatusCode.NotFound, string.IsNullOrWhiteSpace(nex.Message) ? "Recurso não encontrado." : nex.Message, nameof(HttpStatusCode.NotFound), null);
+                case ConcurrencyException cex:
+                    return (HttpStatusCode.Conflict, string.IsNullOrWhiteSpace(cex.Message) ? "Conflito de concorrência." : cex.Message, nameof(HttpStatusCode.Conflict), null);
+                case DbUpdateConcurrencyException:
+                    return (HttpStatusCode.Conflict, "Conflito de concorrência no banco de dados.", nameof(HttpStatusCode.Conflict), null);
+                case DbUpdateException:
+                    return (HttpStatusCode.BadRequest, "Falha ao persistir alterações no banco de dados.", nameof(HttpStatusCode.BadRequest), null);
+                default:
+                    return (HttpStatusCode.InternalServerError, "Erro interno do servidor.", nameof(HttpStatusCode.InternalServerError), null);
+            }
         }
     }
 }

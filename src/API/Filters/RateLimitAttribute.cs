@@ -1,14 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
-using RhSensoWebApi.Core.Interfaces;              // ICacheService
-using RhSensoWebApi.Core.Common.Exceptions;       // BaseResponse<T>, ErrorDto
+using RhSensoWebApi.Core.Common.Exceptions;
+using RhSensoWebApi.Core.Interfaces; // ICacheService
 
 namespace RhSensoWebApi.API.Filters
 {
-    /// <summary>
-    /// Atributo simples de rate limit por IP+rota usando ICacheService.
-    /// Responde 429 com BaseResponse<object> (Success=false, Error).
-    /// </summary>
     [AttributeUsage(AttributeTargets.Method | AttributeTargets.Class, AllowMultiple = false)]
     public sealed class RateLimitAttribute : ActionFilterAttribute
     {
@@ -25,7 +21,7 @@ namespace RhSensoWebApi.API.Filters
 
         public override async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
         {
-            var cache = context.HttpContext.RequestServices.GetService(typeof(ICacheService)) as ICacheService;
+            var cache = (ICacheService?)context.HttpContext.RequestServices.GetService(typeof(ICacheService));
             if (cache is null)
             {
                 await next();
@@ -42,11 +38,9 @@ namespace RhSensoWebApi.API.Filters
                 var resp = new BaseResponse<object>
                 {
                     Success = false,
-                    Error = new ErrorDto
-                    {
-                        Code = "TooManyRequests",
-                        Message = "Muitas tentativas. Tente novamente mais tarde."
-                    }
+                    Message = "Too many requests",
+                    Error = new ErrorDto { Code = "TooManyRequests", Message = "Muitas tentativas. Tente novamente mais tarde." },
+                    TraceId = context.HttpContext.TraceIdentifier
                 };
                 context.Result = new ObjectResult(resp) { StatusCode = StatusCodes.Status429TooManyRequests };
                 return;

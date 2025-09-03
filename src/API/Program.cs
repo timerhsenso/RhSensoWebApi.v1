@@ -55,39 +55,56 @@ builder.Services.AddControllers(options =>
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 
-// Item 0 — Resposta uniforme para 400 de ModelState
-// Observação: seu BaseResponse atual não tem dicionário de errors; agregamos mensagens em uma string.
+// Item 0 — 400 de validação padronizado (com errors por campo + traceId)
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
     options.InvalidModelStateResponseFactory = context =>
     {
-        var allErrors = context.ModelState
+        var errors = context.ModelState
             .Where(e => e.Value?.Errors.Count > 0)
-            .SelectMany(kvp => kvp.Value!.Errors.Select(err =>
-                string.IsNullOrWhiteSpace(err.ErrorMessage) ? "Invalid value." : err.ErrorMessage))
-            .ToArray();
+            .ToDictionary(
+                kvp => kvp.Key,
+                kvp => kvp.Value!.Errors
+                    .Select(err => string.IsNullOrWhiteSpace(err.ErrorMessage) ? "Invalid value." : err.ErrorMessage)
+                    .ToArray()
+            );
 
-        var message = allErrors.Length == 0
-            ? "Falha de validação."
-            : string.Join("; ", allErrors);
-
-        var payload = new BaseResponse<object>
+        var resp = new BaseResponse<object>
         {
             Success = false,
-            Error = new ErrorDto
-            {
-                Code = "ValidationError",
-                Message = message
-            }
+            Message = "Falha de validação.",
+            Errors = errors,                                   // dicionário por campo
+            TraceId = context.HttpContext.TraceIdentifier      // traceId no corpo
         };
 
-        return new BadRequestObjectResult(payload);
+        return new BadRequestObjectResult(resp);
     };
 });
 
-// Database
+
+// Database  usar em produção 
+/*
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
+*/
+
+builder.Services.AddDbContext<AppDbContext>(options =>
+{
+    options.UseSqlServer(builder.Configuration.GetConnectionString("Default"));
+
+    // Loga as queries SQL no nível Information
+    //options.LogTo(Console.WriteLine, LogLevel.Information);
+
+    options.LogTo(
+    log => Serilog.Log.Information(log),
+    LogLevel.Information
+);
+
+
+    // Opcional: loga parâmetros
+    options.EnableSensitiveDataLogging();
+});
+
 
 // Cache (Memória + opcional Redis)
 builder.Services.AddMemoryCache();
@@ -234,3 +251,5 @@ using (var scope = app.Services.CreateScope())
 */
 
 app.Run();
+
+public partial class Program { } // Necessário para WebApplicationFactory<Program>
