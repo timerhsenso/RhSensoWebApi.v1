@@ -14,6 +14,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RhSensoWebApi.Infrastructur
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "RhSensoWebApi.Tests", "tests\RhSensoWebApi.Tests\RhSensoWebApi.Tests.csproj", "{91B69ED5-4F3C-4930-8BA8-1651C9A02581}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RhSensoWeb", "src\Web\RhSensoWeb\RhSensoWeb.csproj", "{7FECE7CD-0470-45E5-A2C4-DF12E91B767A}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -36,6 +38,10 @@ Global
 		{91B69ED5-4F3C-4930-8BA8-1651C9A02581}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{91B69ED5-4F3C-4930-8BA8-1651C9A02581}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{91B69ED5-4F3C-4930-8BA8-1651C9A02581}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7FECE7CD-0470-45E5-A2C4-DF12E91B767A}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7FECE7CD-0470-45E5-A2C4-DF12E91B767A}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7FECE7CD-0470-45E5-A2C4-DF12E91B767A}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7FECE7CD-0470-45E5-A2C4-DF12E91B767A}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -50,4 +56,3 @@ Global
 		SolutionGuid = {0181FAD0-E2DF-4C53-A5F4-1B76B4014982}
 	EndGlobalSection
 EndGlobal
-

@@ -11,6 +11,7 @@
 //    - JWT configurado a partir de segredos.
 //    - Fail-fast em produção: sem ConnectionString/Key/AllowedOrigins => não sobe.
 //    - Padronização: ConnectionStrings:Default.
+//    - Health checks (com readiness mapeado) e raiz amigável.
 //
 //  📦 Como configurar (DEV):
 //    dotnet user-secrets init
@@ -32,6 +33,7 @@ using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;                    // InvalidModelStateResponseFactory
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Logging;               // LogLevel.Information
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using RhSensoWebApi.API.Middleware;               // Middlewares próprios
@@ -45,6 +47,7 @@ using RhSensoWebApi.Infrastructure.Data.Repositories;
 using RhSensoWebApi.Infrastructure.Services;
 using Serilog;
 using Serilog.Events;
+using System.Linq;                                 // Where/ToDictionary
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -130,15 +133,25 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 });
 
 // -------------------------
-// Cache (Memória + opcional Redis)
+// Cache (Memória + Redis opcional, fallback em memória distribuída)
 // -------------------------
-builder.Services.AddMemoryCache();
+builder.Services.AddMemoryCache(); // cache local L1 (IMemoryCache)
 
 var redisConnection = builder.Configuration.GetConnectionString("Redis");
-if (!string.IsNullOrEmpty(redisConnection))
+
+if (!string.IsNullOrWhiteSpace(redisConnection))
 {
+    // Produção (ou quando Redis configurado)
     builder.Services.AddStackExchangeRedisCache(options =>
-        options.Configuration = redisConnection);
+    {
+        options.Configuration = redisConnection;
+        options.InstanceName = "rhsenso:"; // prefixo p/ evitar colisões
+    });
+}
+else
+{
+    // Dev ou quando não há Redis configurado
+    builder.Services.AddDistributedMemoryCache();
 }
 
 // -------------------------
@@ -147,7 +160,7 @@ if (!string.IsNullOrEmpty(redisConnection))
 // - Chave deve vir de User Secrets/VARs (não versionar)
 // -------------------------
 var jwtSettings = builder.Configuration.GetSection("JWT");
-var jwtKey = builder.Configuration["JWT:Key"]; // não usar null-forgiving; validamos adiante
+var jwtKey = builder.Configuration["JWT:Key"]; // validado depois no fail-fast
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -159,7 +172,6 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            // A chave é validada em runtime; falharemos adiante se ela estiver ausente
             IssuerSigningKey = string.IsNullOrWhiteSpace(jwtKey)
                 ? new SymmetricSecurityKey(Encoding.UTF8.GetBytes("placeholder-key")) // nunca será usada se falharmos cedo
                 : new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
@@ -239,6 +251,7 @@ builder.Services.AddCors(options =>
         {
             var devFallback = new[]
             {
+                "https://localhost:7050", "http://localhost:5189", // fronts MVC
                 "https://localhost:5173", "http://localhost:5173",
                 "https://localhost:5174", "http://localhost:5174"
             };
@@ -263,10 +276,12 @@ builder.Services.AddCors(options =>
 
 // -------------------------
 // Health Checks (liveness e readiness)
+//  OBS: sua versão do pacote não aceita 'timeout' por parâmetro aqui.
+//       Se precisar de timeout curto, use 'Connect Timeout=5' na connection string.
 // -------------------------
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy())  // liveness: /health
-    .AddDbContextCheck<AppDbContext>();                   // readiness: /health/ready
+    .AddDbContextCheck<AppDbContext>(name: "db");         // readiness: /health/ready
 
 // -------------------------
 // Dependency Injection (Repos/Serviços)
@@ -275,9 +290,8 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<ICacheService, CacheService>();
-//builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
+// builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<RhSensoWebApi.Core.Interfaces.IPasswordHasher, RhSensoWebApi.Infrastructure.Services.PasswordHasher>();
-
 
 // -------------------------
 // Fail-fast de produção (não sobe sem segredos mínimos)
@@ -342,8 +356,24 @@ app.MapHealthChecks("/health", new HealthCheckOptions
 // /health/ready -> readiness (depende de DB) -> pode responder 503 se DB falhar
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
-    Predicate = _ => true
+    Predicate = _ => true,
+    ResultStatusCodes =
+    {
+        [HealthStatus.Healthy] = StatusCodes.Status200OK,
+        [HealthStatus.Degraded] = StatusCodes.Status200OK,
+        [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable
+    }
 });
+
+// Rota raiz amigável (evita 404 em "/")
+if (app.Environment.IsDevelopment())
+{
+    app.MapGet("/", () => Results.Redirect("/swagger"));
+}
+else
+{
+    app.MapGet("/", () => Results.Text("RhSenso API - OK", "text/plain"));
+}
 
 // Controllers
 app.MapControllers();
