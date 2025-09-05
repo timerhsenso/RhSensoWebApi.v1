@@ -56,6 +56,12 @@ using RhSensoWebApi.Infrastructure;
 using Microsoft.EntityFrameworkCore;
 using RhSensoWebApi.Infrastructure.Data.Context;
 
+using RhSensoWebApi.Core.Abstractions.SEG.Botoes;
+using RhSensoWebApi.Infrastructure.Services.SEG.Botoes;
+
+
+
+
 var builder = WebApplication.CreateBuilder(args);
 
 // ============================================================================
@@ -296,6 +302,9 @@ builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<ICacheService, CacheService>();
 // builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<RhSensoWebApi.Core.Interfaces.IPasswordHasher, RhSensoWebApi.Infrastructure.Services.PasswordHasher>();
+
+builder.Services.AddScoped<IBotoesService, BotoesService>();
+
 
 // -------------------------
 // Fail-fast de produção (não sobe sem segredos mínimos)

@@ -3,6 +3,15 @@
     ViewData["Title"] = "Botões";
     Layout = "_Layout";
 }
+
+@if (ViewBag.ApiBaseUrl is string apiUrl)
+{
+    <small class="text-muted">
+        API: <span class="badge bg-secondary">@apiUrl</span>
+    </small>
+}
+
+
 <div class="card">
   <div class="card-header d-flex align-items-center justify-content-between">
     <h5 class="mb-0">Botões</h5>

@@ -1,0 +1,228 @@
+RhSenso – Guia de Setup (DEV e PROD)
+
+IMPORTANTE: este arquivo contém instruções de ambiente. Não comitar este .md nem arquivos com segredos. Veja o bloco “.gitignore (não comitar)” no final.
+
+0) Pré-requisitos
+
+.NET SDK 8.x
+
+SQL Server (LocalDB, SQL Server local ou Docker)
+
+(Opcional) Docker para subir SQL Server rapidamente
+
+Acesso ao repositório deste projeto
+
+1) Estrutura dos projetos
+src/
+├─ API/                         → RhSensoWebApi.API (ASP.NET Core Web API)
+├─ Core/                        → RhSensoWebApi.Core (entidades/abstrações)
+├─ Infrastructure/              → RhSensoWebApi.Infrastructure (EF Core, serviços, AppDbContext)
+│   └─ Data/
+│      ├─ Context/AppDbContext.cs
+│      └─ Configurations/SEG/BotaoConfiguration.cs
+├─ RhSensoWeb/                  → Aplicação Web (MVC Razor)
+└─ RhSenso.Shared/              → DTOs/contratos compartilhados
+
+2) Variáveis de ambiente / segredos
+
+Usamos o dotnet user-secrets em DEV (seguro, não vai para o Git). Em PROD, usar variáveis de ambiente ou appsettings.Production.json no servidor.
+
+2.1. API (src/API/RhSensoWebApi.API.csproj)
+
+Init de segredos:
+
+dotnet user-secrets init --project src/API/RhSensoWebApi.API.csproj
+
+
+Defina:
+
+# Connection string
+dotnet user-secrets set "ConnectionStrings:Default" "Server=localhost,1433;Database=RhSensoDb;User Id=sa;Password=<SENHA>;TrustServerCertificate=True;" --project src/API/RhSensoWebApi.API.csproj
+
+# CORS (origens permitidas em DEV)
+dotnet user-secrets set "Cors:AllowedOrigins:0" "https://localhost:5002" --project src/API/RhSensoWebApi.API.csproj
+dotnet user-secrets set "Cors:AllowedOrigins:1" "http://localhost:5002"  --project src/API/RhSensoWebApi.API.csproj
+
+# (Opcional) JWT
+dotnet user-secrets set "Jwt:Issuer"   "rh.senso.dev" --project src/API/RhSensoWebApi.API.csproj
+dotnet user-secrets set "Jwt:Audience" "rh.senso.dev" --project src/API/RhSensoWebApi.API.csproj
+dotnet user-secrets set "Jwt:Key"      "<chave-simetrica-32+chars>" --project src/API/RhSensoWebApi.API.csproj
+
+2.2. APP Web (src/RhSensoWeb/RhSensoWeb.csproj)
+
+Init de segredos:
+
+dotnet user-secrets init --project src/RhSensoWeb/RhSensoWeb.csproj
+
+
+Defina:
+
+# URL base da API (ajuste a porta conforme o seu run local)
+dotnet user-secrets set "Api:BaseUrl" "https://localhost:5001/" --project src/RhSensoWeb/RhSensoWeb.csproj
+
+
+Em DEV deixe ASPNETCORE_ENVIRONMENT=Development (launchSettings já faz isso).
+Em PROD use ASPNETCORE_ENVIRONMENT=Production.
+
+3) Banco de dados
+3.1. Subir SQL Server via Docker (opcional)
+docker run -e "ACCEPT_EULA=Y" -e "MSSQL_SA_PASSWORD=Your_password123" \
+  -p 1433:1433 --name sql-rhsenso -d mcr.microsoft.com/mssql/server:2019-latest
+
+
+Connection string exemplo:
+
+Server=localhost,1433;Database=RhSensoDb;User Id=sa;Password=Your_password123;TrustServerCertificate=True;
+
+3.2. Criar/Atualizar schema com EF Core
+
+Rodar da raiz do repositório.
+
+Se já existem migrações:
+
+dotnet ef database update \
+  --project src/Infrastructure/RhSensoWebApi.Infrastructure.csproj \
+  --startup-project src/API/RhSensoWebApi.API.csproj
+
+
+Se NÃO existem migrações ainda:
+
+dotnet ef migrations add Initial \
+  --project src/Infrastructure/RhSensoWebApi.Infrastructure.csproj \
+  --startup-project src/API/RhSensoWebApi.API.csproj
+
+dotnet ef database update \
+  --project src/Infrastructure/RhSensoWebApi.Infrastructure.csproj \
+  --startup-project src/API/RhSensoWebApi.API.csproj
+
+4) Rodando em DEV
+4.1. API
+dotnet run --project src/API/RhSensoWebApi.API.csproj
+
+
+Swagger: https://localhost:5001/swagger
+
+4.2. APP (Web)
+dotnet run --project src/RhSensoWeb/RhSensoWeb.csproj
+
+
+Acesse: https://localhost:5002
+
+A APP consome a API usando Api:BaseUrl (user-secrets).
+
+Se der CORS, confira as origens em Cors:AllowedOrigins (API).
+
+5) Build & Deploy (PROD)
+5.1. Publicar
+# API
+dotnet publish src/API/RhSensoWebApi.API.csproj -c Release -o out/api
+
+# APP
+dotnet publish src/RhSensoWeb/RhSensoWeb.csproj -c Release -o out/app
+
+
+Leve o conteúdo de out/api e out/app para o servidor.
+
+5.2. Variáveis em PRODUÇÃO (exemplo)
+
+API (ex.: variáveis de ambiente / appsettings.Production.json):
+
+{
+  "ConnectionStrings": {
+    "Default": "Server=<host>;Database=<db>;User Id=<user>;Password=<pwd>;TrustServerCertificate=True;"
+  },
+  "Cors": {
+    "AllowedOrigins": [ "https://app.suaempresa.com" ]
+  },
+  "Jwt": {
+    "Issuer": "rh.senso.prod",
+    "Audience": "rh.senso.prod",
+    "Key": "<chave forte aqui>"
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft.AspNetCore": "Warning"
+    }
+  }
+}
+
+
+APP:
+
+{
+  "Api": {
+    "BaseUrl": "https://api.suaempresa.com/"
+  }
+}
+
+5.3. Hospedagem
+
+Kestrel atrás de Nginx/IIS (reverse proxy) ou IIS diretamente (Hosting Bundle .NET).
+
+Defina ASPNETCORE_ENVIRONMENT=Production.
+
+Aplique migrações no deploy (pipeline) ou manualmente.
+
+6) Dicas de Troubleshooting
+
+ref/*.dll não encontrado: Clean Solution + apagar bin/obj + Rebuild.
+
+DbContext não resolve: confirme DI (AppDbContext) no Program.cs da API.
+
+DTOs não encontrados: verifique referência de projeto Core → Shared, Infrastructure → Core/Shared, API → Core/Infrastructure/Shared, Web → Shared.
+
+CORS: alinhe Cors:AllowedOrigins (API) e Api:BaseUrl (APP).
+
+.gitignore (não comitar)
+
+Adicione essas entradas no .gitignore da solução:
+
+# docs locais
+docs/SETUP.local.md
+SETUP.local.md
+
+# configs locais e segredos
+*.local.json
+appsettings.*.local.json
+.env
+.env.*
+secrets.json
+
+# user-secrets ficam fora do repo por padrão
+
+Apêndice – Templates de appsettings (sem segredos)
+
+Você pode comitar templates e cada dev copia para .local.json.
+
+Template – API appsettings.Development.template.json
+
+{
+  "ConnectionStrings": {
+    "Default": "<preencher via user-secrets ou .local.json>"
+  },
+  "Cors": {
+    "AllowedOrigins": [ "https://localhost:5002", "http://localhost:5002" ]
+  }
+}
+
+
+Template – APP appsettings.Development.template.json
+
+{
+  "Api": {
+    "BaseUrl": "https://localhost:5001/"
+  }
+}
+
+
+Copia de uso local:
+
+# API
+cp src/API/appsettings.Development.template.json src/API/appsettings.Development.local.json
+
+# APP
+cp src/RhSensoWeb/appsettings.Development.template.json src/RhSensoWeb/appsettings.Development.local.json
+
+
+Garanta que o Program.cs não lê .local.json por padrão; o recomendado é usar user-secrets em DEV e variáveis de ambiente/appsettings.Production.json em PROD. Os .local.json são apenas uma alternativa (se optarem por isso).
