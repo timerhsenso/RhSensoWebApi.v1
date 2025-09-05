@@ -1,8 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+using RhSensoWebApi.Core.DTOs;
 using RhSensoWebApi.Core.Entities;
 using RhSensoWebApi.Core.Interfaces;
-using RhSensoWebApi.Core.DTOs;
 using RhSensoWebApi.Infrastructure.Data.Context;
 
 namespace RhSensoWebApi.Infrastructure.Data.Repositories;
@@ -11,27 +11,27 @@ public class UserRepository : IUserRepository
 {
     private readonly AppDbContext _context;
     private readonly ILogger<UserRepository> _logger;
-    
+
     public UserRepository(AppDbContext context, ILogger<UserRepository> logger)
     {
         _context = context;
         _logger = logger;
     }
-    
+
     public async Task<User?> GetByUsernameAsync(string username)
     {
         return await _context.Users
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.CdUsuario == username);
     }
-    
+
     public async Task<User?> GetByUsernameAndPasswordAsync(string username, string passwordHash)
     {
         return await _context.Users
             .AsNoTracking()
             .FirstOrDefaultAsync(u => u.CdUsuario == username && u.SenhaUser == passwordHash && u.FlAtivo);
     }
-    
+
     public async Task<List<PermissionDto>> GetUserPermissionsAsync(string userId)
     {
         try
@@ -59,7 +59,7 @@ public class UserRepository : IUserRepository
                 .OrderBy(p => p.CdSistema)
                 .ThenBy(p => p.CdFuncao)
                 .ToListAsync();
-                
+
             return permissions;
         }
         catch (Exception ex)

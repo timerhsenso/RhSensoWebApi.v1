@@ -1,6 +1,5 @@
 ﻿using Microsoft.AspNetCore.Mvc;
 using RhSensoWebApi.API.Common;
-using System.Collections.Generic;
 
 namespace RhSensoWebApi.API.Controllers;
 
@@ -8,7 +7,6 @@ namespace RhSensoWebApi.API.Controllers;
 [Route("api/v1/test-errors")]
 public class TestErrorsController : ControllerBase
 {
-    // 400 com errors por campo — garante presença de 'errors' no payload
     [HttpGet("validation")]
     public IActionResult Validation()
     {
@@ -17,7 +15,6 @@ public class TestErrorsController : ControllerBase
             ["login"] = new[] { "Campo obrigatório." }
         };
 
-        // Assinatura: FailResponse(statusCode, message, code?, errors?)
         return this.FailResponse(
             StatusCodes.Status400BadRequest,
             "Erro de validação",
@@ -42,7 +39,6 @@ public class TestErrorsController : ControllerBase
     public IActionResult ConflictError()
         => this.FailResponse(StatusCodes.Status409Conflict, "Conflito", "CONFLICT");
 
-    // 500 deste endpoint não precisa trazer 'errors'; o teste de middleware cobre o 500 com 'errors'
     [HttpGet("internal")]
     public IActionResult InternalError()
         => this.FailResponse(StatusCodes.Status500InternalServerError, "Erro interno do servidor.", "INTERNAL_ERROR");

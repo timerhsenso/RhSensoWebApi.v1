@@ -1,6 +1,6 @@
-using System.Security.Claims;
-using RhSensoWebApi.Core.Entities;
 using RhSensoWebApi.Core.DTOs;
+using RhSensoWebApi.Core.Entities;
+using System.Security.Claims;
 
 namespace RhSensoWebApi.Core.Interfaces;
 

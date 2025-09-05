@@ -1,12 +1,12 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
+using RhSensoWebApi.Core.DTOs;
 using RhSensoWebApi.Core.Entities;
 using RhSensoWebApi.Core.Interfaces;
-using RhSensoWebApi.Core.DTOs;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
+using System.Text;
 
 namespace RhSensoWebApi.Infrastructure.Services;
 
@@ -14,20 +14,20 @@ public class TokenService : ITokenService
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<TokenService> _logger;
-    
+
     public TokenService(IConfiguration configuration, ILogger<TokenService> logger)
     {
         _configuration = configuration;
         _logger = logger;
     }
-    
+
     public string GenerateToken(User user, List<PermissionDto> permissions)
     {
         try
         {
             var jwtSettings = _configuration.GetSection("JWT");
             var key = Encoding.ASCII.GetBytes(jwtSettings["Key"]!);
-            
+
             var claims = new List<Claim>
             {
                 new(ClaimTypes.Name, user.CdUsuario),
@@ -39,18 +39,18 @@ public class TokenService : ITokenService
                 new("flativo", user.FlAtivo.ToString().ToLower()),
                 new("idfuncionario", user.IdFuncionario.ToString()),
                 new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new(JwtRegisteredClaimNames.Iat, 
-                    DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(), 
+                new(JwtRegisteredClaimNames.Iat,
+                    DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(),
                     ClaimValueTypes.Integer64)
             };
-            
+
             // Adicionar permissões como claims (formato compacto)
             foreach (var permission in permissions)
             {
-                claims.Add(new Claim("permission", 
+                claims.Add(new Claim("permission",
                     $"{permission.CdSistema}:{permission.CdFuncao}:{permission.CdAcoes}:{permission.CdRestric}"));
             }
-            
+
             var tokenDescriptor = new SecurityTokenDescriptor
             {
                 Subject = new ClaimsIdentity(claims),
@@ -61,10 +61,10 @@ public class TokenService : ITokenService
                     new SymmetricSecurityKey(key),
                     SecurityAlgorithms.HmacSha256Signature)
             };
-            
+
             var tokenHandler = new JwtSecurityTokenHandler();
             var token = tokenHandler.CreateToken(tokenDescriptor);
-            
+
             return tokenHandler.WriteToken(token);
         }
         catch (Exception ex)
@@ -73,14 +73,14 @@ public class TokenService : ITokenService
             throw;
         }
     }
-    
+
     public bool ValidateToken(string token)
     {
         try
         {
             var jwtSettings = _configuration.GetSection("JWT");
             var key = Encoding.ASCII.GetBytes(jwtSettings["Key"]!);
-            
+
             var tokenHandler = new JwtSecurityTokenHandler();
             var validationParameters = new TokenValidationParameters
             {
@@ -93,7 +93,7 @@ public class TokenService : ITokenService
                 ValidateLifetime = true,
                 ClockSkew = TimeSpan.Zero
             };
-            
+
             tokenHandler.ValidateToken(token, validationParameters, out SecurityToken validatedToken);
             return true;
         }
@@ -102,12 +102,12 @@ public class TokenService : ITokenService
             return false;
         }
     }
-    
+
     public ClaimsPrincipal GetPrincipalFromToken(string token)
     {
         var jwtSettings = _configuration.GetSection("JWT");
         var key = Encoding.ASCII.GetBytes(jwtSettings["Key"]!);
-        
+
         var tokenHandler = new JwtSecurityTokenHandler();
         var validationParameters = new TokenValidationParameters
         {
@@ -120,7 +120,7 @@ public class TokenService : ITokenService
             ValidateLifetime = false, // Não validar expiração aqui
             ClockSkew = TimeSpan.Zero
         };
-        
+
         var principal = tokenHandler.ValidateToken(token, validationParameters, out SecurityToken validatedToken);
         return principal;
     }

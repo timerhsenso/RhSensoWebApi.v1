@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using RhSensoWebApi.Core.Common.Exceptions;
 

@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace RhSensoWebApi.Core.Common.Exceptions;
+﻿namespace RhSensoWebApi.Core.Common.Exceptions;
 
 /// <summary>
 /// Exceção base da aplicação com metadados HTTP e código de erro.

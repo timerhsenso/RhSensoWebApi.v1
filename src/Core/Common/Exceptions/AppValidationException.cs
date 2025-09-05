@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace RhSensoWebApi.Core.Common.Exceptions;
+﻿namespace RhSensoWebApi.Core.Common.Exceptions;
 
 /// <summary>400 Bad Request com erros por campo.</summary>
 public sealed class AppValidationException : AppException

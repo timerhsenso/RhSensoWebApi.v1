@@ -1,14 +1,41 @@
+// --------------------------------------------------------------------------------------
+//  FASE 1 — Segurança de Produção (CORS / HTTPS / JWT / Segredos)
+//  Por quê: reduzir superfície de ataque e aplicar mínimos de produção.
+//  Este arquivo está amplamente documentado para que qualquer pessoa entenda as decisões.
+//
+//  ✅ Itens implementados:
+//    - CORS com política nomeada ("Frontends") e origens restritas por ambiente.
+//      * Em DEV: usa "Cors:AllowedOrigins" ou fallback para localhost.
+//      * Em PROD: exige "Cors:AllowedOrigins" (falha se não configurar).
+//    - HTTPS/HSTS em produção; RequireHttpsMetadata = true fora de DEV.
+//    - JWT configurado a partir de segredos.
+//    - Fail-fast em produção: sem ConnectionString/Key/AllowedOrigins => não sobe.
+//    - Padronização: ConnectionStrings:Default.
+//
+//  📦 Como configurar (DEV):
+//    dotnet user-secrets init
+//    dotnet user-secrets set "ConnectionStrings:Default" "Server=...;Database=...;User Id=...;Password=...;TrustServerCertificate=true"
+//    dotnet user-secrets set "JWT:Key" "<chave-aleatoria-256bits>"
+//    // Opcional: cors para DEV
+//    dotnet user-secrets set "Cors:AllowedOrigins:0" "https://localhost:5173"
+//    dotnet user-secrets set "Cors:AllowedOrigins:1" "http://localhost:5173"
+//
+//  🏭 Como configurar (PROD) via variáveis de ambiente (exemplos):
+//    ConnectionStrings__Default="Server=...;Database=...;User Id=...;Password=...;TrustServerCertificate=true"
+//    JWT__Key="<chave-256bits-prod>"
+//    Cors__AllowedOrigins="https://app.seu-dominio.com;https://admin.seu-dominio.com"
+//  (A lista de origens pode vir como array na configuração ou string única separada por ';').
+// --------------------------------------------------------------------------------------
+
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.AspNetCore.Mvc;                    // <- Necessário p/ InvalidModelStateResponseFactory
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.AspNetCore.Mvc;                    // InvalidModelStateResponseFactory
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.Logging;               // <— precisa deste using
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-// Middlewares próprios
-using RhSensoWebApi.API.Middleware;
-// Swagger (SchemaFilters de exemplo)
-using RhSensoWebApi.API.Swagger;
-// BaseResponse / ErrorDto (seu tipo atual no Core)
+using RhSensoWebApi.API.Middleware;               // Middlewares próprios
+using RhSensoWebApi.API.Swagger;                  // Swagger SchemaFilters
 using RhSensoWebApi.Core.Common.Exceptions;       // BaseResponse, ErrorDto
 using RhSensoWebApi.Core.Interfaces;
 using RhSensoWebApi.Core.Services;
@@ -18,18 +45,15 @@ using RhSensoWebApi.Infrastructure.Data.Repositories;
 using RhSensoWebApi.Infrastructure.Services;
 using Serilog;
 using Serilog.Events;
-using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// =========================================================
-// SERILOG — logging estruturado
-// =========================================================
+// ============================================================================
+// SERILOG — logging estruturado (host logger)
+// ============================================================================
 builder.Host.UseSerilog((context, config) =>
     config
         .MinimumLevel.Information()
@@ -42,11 +66,13 @@ builder.Host.UseSerilog((context, config) =>
             rollingInterval: RollingInterval.Day,
             retainedFileCountLimit: 30));
 
-// =========================================================
-/* SERVICES (DI) — tudo ANTES do Build() */
-// =========================================================
+// ============================================================================
+// SERVICES (DI) — tudo ANTES do Build()
+// ============================================================================
 
+// -------------------------
 // Controllers + JSON
+// -------------------------
 builder.Services.AddControllers(options =>
 {
     options.SuppressAsyncSuffixInActionNames = false;
@@ -57,7 +83,9 @@ builder.Services.AddControllers(options =>
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 
-// Item 0 — 400 de validação padronizado (com errors por campo + traceId)
+// -------------------------
+// 400 de validação padronizado (errors por campo + traceId)
+// -------------------------
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
     options.InvalidModelStateResponseFactory = context =>
@@ -75,35 +103,35 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
         {
             Success = false,
             Message = "Falha de validação.",
-            Errors = errors,                                // dicionário por campo
-            TraceId = context.HttpContext.TraceIdentifier    // traceId no corpo
+            Errors = errors,
+            TraceId = context.HttpContext.TraceIdentifier
         };
 
         return new BadRequestObjectResult(resp);
     };
 });
 
-// Database  usar em produção 
-/*
-builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("Default")));
-*/
-
+// -------------------------
+// Database (EF Core / SQL Server)
+// - ConnectionStrings:Default deve vir de User Secrets (DEV) ou VARs/KeyVault (PROD)
+// -------------------------
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
     options.UseSqlServer(builder.Configuration.GetConnectionString("Default"));
 
-    // 1) Liga o log de SQL (vai para o console e Serilog captura)
+    // 1) Log de SQL (vai para console; Serilog captura)
     options.LogTo(Console.WriteLine, LogLevel.Information);
 
-    // 2) (DEV apenas!) Loga parâmetros (pode expor senha/token)
+    // 2) (DEV apenas!) Loga parâmetros sensíveis
     if (builder.Environment.IsDevelopment())
     {
         options.EnableSensitiveDataLogging();
     }
 });
 
+// -------------------------
 // Cache (Memória + opcional Redis)
+// -------------------------
 builder.Services.AddMemoryCache();
 
 var redisConnection = builder.Configuration.GetConnectionString("Redis");
@@ -113,20 +141,28 @@ if (!string.IsNullOrEmpty(redisConnection))
         options.Configuration = redisConnection);
 }
 
+// -------------------------
 // JWT Authentication
+// - Em PROD, RequireHttpsMetadata = true
+// - Chave deve vir de User Secrets/VARs (não versionar)
+// -------------------------
 var jwtSettings = builder.Configuration.GetSection("JWT");
-var key = Encoding.ASCII.GetBytes(jwtSettings["Key"]!);
+var jwtKey = builder.Configuration["JWT:Key"]; // não usar null-forgiving; validamos adiante
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
-        // Em produção, deixe true; para desenvolvimento mantemos false.
         options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
         options.SaveToken = true;
+
+        // Validação de token
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(key),
+            // A chave é validada em runtime; falharemos adiante se ela estiver ausente
+            IssuerSigningKey = string.IsNullOrWhiteSpace(jwtKey)
+                ? new SymmetricSecurityKey(Encoding.UTF8.GetBytes("placeholder-key")) // nunca será usada se falharmos cedo
+                : new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
             ValidateIssuer = true,
             ValidIssuer = jwtSettings["Issuer"],
             ValidateAudience = true,
@@ -136,10 +172,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// Authorization (policies/claims podem ser adicionadas aqui depois)
+// -------------------------
+// Authorization (policies/claims podem ser adicionadas depois)
+// -------------------------
 builder.Services.AddAuthorization();
 
-// Swagger / OpenAPI
+// -------------------------
+// Swagger / OpenAPI (com JWT Bearer)
+// -------------------------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
@@ -171,46 +211,99 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 
-    // Exemplos (Item 0) — se você adicionou os SchemaFilters no projeto
+    // Exemplos — se você adicionou os SchemaFilters no projeto
     c.SchemaFilter<ErrorDtoSchemaExample>();
     c.SchemaFilter<BaseResponseSchemaExample>();
 });
 
-// CORS
+// -------------------------
+// CORS — Política nomeada "Frontends"
+// - Em DEV: usa AllowedOrigins ou fallback para localhost
+// - Em PROD: exige AllowedOrigins (falha se não houver)
+// -------------------------
+string[] allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
+
+// Fallback para var de ambiente única separada por ';'
+var allowedOriginsEnv = builder.Configuration["Cors:AllowedOrigins"];
+if (allowedOrigins.Length == 0 && !string.IsNullOrWhiteSpace(allowedOriginsEnv))
+{
+    allowedOrigins = allowedOriginsEnv
+        .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+}
+
 builder.Services.AddCors(options =>
 {
-    // Em produção, RECOMENDADO restringir a origens conhecidas (WithOrigins)
-    options.AddDefaultPolicy(policy =>
-        policy
-            .AllowAnyOrigin()
-            .AllowAnyMethod()
-            .AllowAnyHeader());
+    options.AddPolicy("Frontends", policy =>
+    {
+        if (builder.Environment.IsDevelopment())
+        {
+            var devFallback = new[]
+            {
+                "https://localhost:5173", "http://localhost:5173",
+                "https://localhost:5174", "http://localhost:5174"
+            };
+            var origins = (allowedOrigins.Length > 0) ? allowedOrigins : devFallback;
+
+            policy.WithOrigins(origins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        }
+        else
+        {
+            if (allowedOrigins.Length == 0)
+                throw new InvalidOperationException(
+                    "CORS: configure 'Cors:AllowedOrigins' para produção (ex.: https://app.seu-dominio.com;https://admin.seu-dominio.com)");
+
+            policy.WithOrigins(allowedOrigins)
+                  .AllowAnyHeader()
+                  .AllowAnyMethod();
+        }
+    });
 });
 
-// Health Checks (separa liveness e readiness)
+// -------------------------
+// Health Checks (liveness e readiness)
+// -------------------------
 builder.Services.AddHealthChecks()
-    // liveness (auto-healthy): usado em /health
-    .AddCheck("self", () => HealthCheckResult.Healthy())
-    // readiness: depende do banco, usado em /health/ready
-    .AddDbContextCheck<AppDbContext>();
+    .AddCheck("self", () => HealthCheckResult.Healthy())  // liveness: /health
+    .AddDbContextCheck<AppDbContext>();                   // readiness: /health/ready
 
-// Dependency Injection
+// -------------------------
+// Dependency Injection (Repos/Serviços)
+// -------------------------
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<ICacheService, CacheService>();
-builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
+//builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
+builder.Services.AddScoped<RhSensoWebApi.Core.Interfaces.IPasswordHasher, RhSensoWebApi.Infrastructure.Services.PasswordHasher>();
 
-// =========================================================
-/* BUILD — a partir daqui temos o 'app' */
-// =========================================================
+
+// -------------------------
+// Fail-fast de produção (não sobe sem segredos mínimos)
+// -------------------------
+if (builder.Environment.IsProduction())
+{
+    if (string.IsNullOrWhiteSpace(builder.Configuration.GetConnectionString("Default")))
+        throw new InvalidOperationException("ConnectionStrings:Default não configurada em produção (use variável de ambiente/KeyVault).");
+
+    if (string.IsNullOrWhiteSpace(jwtKey))
+        throw new InvalidOperationException("JWT:Key não configurada em produção (use variável de ambiente/KeyVault).");
+
+    if (allowedOrigins.Length == 0)
+        throw new InvalidOperationException("Cors:AllowedOrigins deve conter pelo menos 1 origem em produção.");
+}
+
+// ============================================================================
+// BUILD — a partir daqui temos o 'app'
+// ============================================================================
 var app = builder.Build();
 
-// =========================================================
-/* PIPELINE (middlewares) — tudo DEPOIS do Build() */
-// =========================================================
+// ============================================================================
+// PIPELINE (middlewares) — tudo DEPOIS do Build()
+// ============================================================================
 
-// Swagger
+// Swagger — somente em DEV
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -218,40 +311,35 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
+    // Em produção, página de erro genérica + HSTS
     app.UseExceptionHandler("/Error");
-    app.UseHsts(); // HSTS apenas em produção
+    app.UseHsts();
 }
 
-// HTTPS redirection (mantém como estava quando passou 19/19)
+// HTTPS redirection
 app.UseHttpsRedirection();
 
-/*
- * ORDEM QUE PASSOU 19/19:
- * 1) Logging de request/response
- * 2) ExceptionHandlingMiddleware (padroniza qualquer exceção que ocorra depois)
- */
-
-// 1) Logging (request/response)
+// [1] Logging de request/response
 app.UseMiddleware<RequestLoggingMiddleware>();
 
-// 2) Tratamento global de exceções (Item 0)
+// [2] Tratamento global de exceções => padroniza falhas (BaseResponse)
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
-// CORS
-app.UseCors();
+// CORS — usar SEMPRE a política nomeada
+app.UseCors("Frontends");
 
 // AuthN / AuthZ
 app.UseAuthentication();
 app.UseAuthorization();
 
 // Health Checks
-// /health  -> liveness (sem dependências) -> deve responder 200 em testes
+// /health  -> liveness (sem dependências) -> responde 200 em testes
 app.MapHealthChecks("/health", new HealthCheckOptions
 {
     Predicate = r => r.Name == "self"
 });
 
-// /health/ready -> readiness (todas as dependências) -> pode responder 503 se DB falhar
+// /health/ready -> readiness (depende de DB) -> pode responder 503 se DB falhar
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = _ => true
@@ -260,7 +348,7 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 // Controllers
 app.MapControllers();
 
-// Migrations (opcional — comente/descomente conforme necessidade)
+// (Opcional) Migrations automáticas — use conscientemente
 /*
 using (var scope = app.Services.CreateScope())
 {
@@ -269,6 +357,11 @@ using (var scope = app.Services.CreateScope())
 }
 */
 
+// Log de start com resumo de CORS
+Serilog.Log.Information("Ambiente: {Env}. CORS habilitado para: {Origins}",
+    app.Environment.EnvironmentName,
+    string.Join(", ", allowedOrigins.Length > 0 ? allowedOrigins : new[] { "(DEV fallback localhost)" }));
+
 app.Run();
 
-public partial class Program { } // Necessário para WebApplicationFactory<Program>
+public partial class Program { } // Necessário para testes (WebApplicationFactory<Program>)

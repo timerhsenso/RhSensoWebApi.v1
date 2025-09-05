@@ -1,8 +1,7 @@
-using System.Net;
-using System.Net.Http.Json;
 using FluentAssertions;
-using RhSensoWebApi.Tests.Common;
 using RhSensoWebApi.Core.DTOs;
+using RhSensoWebApi.Tests.Common;
+using System.Net.Http.Json;
 
 namespace RhSensoWebApi.Tests.Controllers;
 

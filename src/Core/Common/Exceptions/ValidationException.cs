@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace RhSensoWebApi.Core.Common.Exceptions
 {
     public class ValidationException : Exception

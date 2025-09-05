@@ -1,11 +1,9 @@
 using Microsoft.Extensions.Logging;
-using Moq;
-using System.Text;
-using System.Text.Json;
-using RhSensoWebApi.Core.Interfaces;
-using RhSensoWebApi.Core.Entities;
 using RhSensoWebApi.Core.DTOs;
+using RhSensoWebApi.Core.Entities;
+using RhSensoWebApi.Core.Interfaces;
 using RhSensoWebApi.ExpandedTests.Fixtures;
+using System.Text;
 
 namespace RhSensoWebApi.ExpandedTests.Helpers;
 
@@ -26,14 +24,14 @@ public static class TestHelpers
         public static Mock<IUserRepository> CreateUserRepositoryMock()
         {
             var mock = new Mock<IUserRepository>();
-            
+
             // Configurações padrão que podem ser sobrescritas nos testes
             mock.Setup(x => x.GetByUsernameAsync(It.IsAny<string>()))
                 .ReturnsAsync((User?)null);
-                
+
             mock.Setup(x => x.GetUserPermissionsAsync(It.IsAny<string>()))
                 .ReturnsAsync(new List<PermissionDto>());
-                
+
             return mock;
         }
 
@@ -44,7 +42,7 @@ public static class TestHelpers
         {
             mock.Setup(x => x.GetByUsernameAsync(user.CdUsuario))
                 .ReturnsAsync(user);
-                
+
             if (permissions != null)
             {
                 mock.Setup(x => x.GetUserPermissionsAsync(user.CdUsuario))
@@ -58,15 +56,15 @@ public static class TestHelpers
         public static Mock<ITokenService> CreateTokenServiceMock()
         {
             var mock = new Mock<ITokenService>();
-            
+
             // Configuração padrão para gerar token
             mock.Setup(x => x.GenerateToken(It.IsAny<User>(), It.IsAny<List<PermissionDto>>()))
                 .Returns("mock_jwt_token_12345");
-                
+
             // Configuração padrão para validar token
             mock.Setup(x => x.ValidateToken(It.IsAny<string>()))
                 .Returns(true);
-                
+
             return mock;
         }
 
@@ -76,15 +74,15 @@ public static class TestHelpers
         public static Mock<IPasswordHasher> CreatePasswordHasherMock()
         {
             var mock = new Mock<IPasswordHasher>();
-            
+
             // Configuração padrão para hash de senha
             mock.Setup(x => x.HashPassword(It.IsAny<string>()))
                 .Returns((string password) => $"hashed_{password}");
-                
+
             // Configuração padrão para verificação de senha (sempre verdadeiro)
             mock.Setup(x => x.VerifyPassword(It.IsAny<string>(), It.IsAny<string>()))
                 .Returns(true);
-                
+
             return mock;
         }
 
@@ -95,7 +93,7 @@ public static class TestHelpers
         {
             mock.Setup(x => x.VerifyPassword(correctPassword, hashedPassword))
                 .Returns(true);
-                
+
             mock.Setup(x => x.VerifyPassword(It.Is<string>(p => p != correctPassword), hashedPassword))
                 .Returns(false);
         }
@@ -106,11 +104,11 @@ public static class TestHelpers
         public static Mock<ICacheService> CreateCacheServiceMock()
         {
             var mock = new Mock<ICacheService>();
-            
+
             // Configuração padrão para cache (sempre retorna null)
             mock.Setup(x => x.GetAsync<object>(It.IsAny<string>())).ReturnsAsync((object?)null);
             mock.Setup(x => x.GetAsync<string>(It.IsAny<string>())).ReturnsAsync((string?)null);
-                
+
             return mock;
         }
 
@@ -215,7 +213,7 @@ public static class TestHelpers
                 throw new ArgumentNullException(nameof(permissions), "Lista de permissões não pode ser nula");
 
             var permission = permissions.FirstOrDefault(p => p.CdSistema == sistema && p.CdFuncao == funcao);
-            
+
             if (permission == null)
                 throw new AssertionException($"Permissão não encontrada: Sistema={sistema}, Função={funcao}");
         }
@@ -229,7 +227,7 @@ public static class TestHelpers
                 throw new ArgumentNullException(nameof(permissions), "Lista de permissões não pode ser nula");
 
             var permission = permissions.FirstOrDefault(p => p.CdSistema == sistema && p.CdFuncao == funcao);
-            
+
             if (permission != null)
                 throw new AssertionException($"Permissão não deveria existir: Sistema={sistema}, Função={funcao}");
         }
@@ -326,7 +324,7 @@ public static class TestHelpers
         public static void AssertExecutionTime(Action action, TimeSpan maxExpectedTime, string operationName = "Operação")
         {
             var executionTime = MeasureExecutionTime(action);
-            
+
             if (executionTime > maxExpectedTime)
             {
                 throw new AssertionException(

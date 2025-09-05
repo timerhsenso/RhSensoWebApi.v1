@@ -1,9 +1,8 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Logging;
-using RhSensoWebApi.Core.Interfaces;
-using RhSensoWebApi.Core.DTOs;
 using RhSensoWebApi.Core.Common.Exceptions;
+using RhSensoWebApi.Core.DTOs;
+using RhSensoWebApi.Core.Interfaces;
 
 namespace RhSensoWebApi.API.Controllers;
 
@@ -14,13 +13,13 @@ public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
     private readonly ILogger<AuthController> _logger;
-    
+
     public AuthController(IAuthService authService, ILogger<AuthController> logger)
     {
         _authService = authService;
         _logger = logger;
     }
-    
+
     /// <summary>
     /// Realiza login do usuário e retorna JWT token
     /// </summary>
@@ -46,17 +45,17 @@ public class AuthController : ControllerBase
                 }
             });
         }
-        
+
         var result = await _authService.LoginAsync(request);
-        
+
         if (!result.Success)
         {
             return Unauthorized(result);
         }
-        
+
         return Ok(result);
     }
-    
+
     /// <summary>
     /// Retorna todas as permissões do usuário autenticado
     /// </summary>
@@ -69,14 +68,14 @@ public class AuthController : ControllerBase
     {
         var userId = User.Identity!.Name!;
         var permissions = await _authService.GetPermissionsAsync(userId);
-        
+
         return Ok(new BaseResponse<List<PermissionDto>>
         {
             Success = true,
             Data = permissions
         });
     }
-    
+
     /// <summary>
     /// Verifica se usuário tem acesso a uma função específica
     /// </summary>
@@ -96,10 +95,10 @@ public class AuthController : ControllerBase
                 Error = new ErrorDto { Code = "E400", Message = "Sistema e função são obrigatórios" }
             });
         }
-        
+
         var userId = User.Identity!.Name!;
         var hasAccess = await _authService.CheckHabilitacaoAsync(userId, sistema, funcao);
-        
+
         return Ok(new BaseResponse<object>
         {
             Success = true,
@@ -111,7 +110,7 @@ public class AuthController : ControllerBase
             }
         });
     }
-    
+
     /// <summary>
     /// Verifica se usuário pode executar uma ação específica
     /// </summary>
@@ -123,8 +122,8 @@ public class AuthController : ControllerBase
     [Authorize]
     [ProducesResponseType(typeof(BaseResponse<object>), StatusCodes.Status200OK)]
     public async Task<IActionResult> CheckBotao(
-        [FromQuery] string sistema, 
-        [FromQuery] string funcao, 
+        [FromQuery] string sistema,
+        [FromQuery] string funcao,
         [FromQuery] string acao)
     {
         if (string.IsNullOrEmpty(sistema) || string.IsNullOrEmpty(funcao) || string.IsNullOrEmpty(acao))
@@ -135,19 +134,19 @@ public class AuthController : ControllerBase
                 Error = new ErrorDto { Code = "E400", Message = "Sistema, função e ação são obrigatórios" }
             });
         }
-        
+
         var userId = User.Identity!.Name!;
         var canPerformAction = await _authService.CheckBotaoAsync(userId, sistema, funcao, acao);
-        
+
         var descricaoAcao = acao switch
         {
             "I" => "Incluir",
-            "A" => "Alterar", 
+            "A" => "Alterar",
             "E" => "Excluir",
             "C" => "Consultar",
             _ => "Desconhecida"
         };
-        
+
         return Ok(new BaseResponse<object>
         {
             Success = true,
@@ -161,7 +160,7 @@ public class AuthController : ControllerBase
             }
         });
     }
-    
+
     /// <summary>
     /// Retorna o tipo de restrição do usuário para uma função
     /// </summary>
@@ -181,10 +180,10 @@ public class AuthController : ControllerBase
                 Error = new ErrorDto { Code = "E400", Message = "Sistema e função são obrigatórios" }
             });
         }
-        
+
         var userId = User.Identity!.Name!;
         var restricao = await _authService.CheckRestricaoAsync(userId, sistema, funcao);
-        
+
         var descricao = restricao switch
         {
             'L' => "Livre",
@@ -192,7 +191,7 @@ public class AuthController : ControllerBase
             'C' => "Coordenador",
             _ => "Sem Permissão"
         };
-        
+
         return Ok(new BaseResponse<object>
         {
             Success = true,

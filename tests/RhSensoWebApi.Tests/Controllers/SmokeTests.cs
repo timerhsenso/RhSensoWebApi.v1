@@ -1,8 +1,4 @@
-﻿using System.Net;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Xunit;
-
-namespace RhSensoWebApi.Tests
+﻿namespace RhSensoWebApi.Tests
 {
     /// <summary>
     /// Smoke básico para garantir que o host sobe e responde healthcheck.

@@ -1,7 +1,4 @@
-﻿using System.Net;
-using System.Net.Http.Json;
-using System.Text.Json;
-using Xunit;
+﻿using System.Net.Http.Json;
 using Xunit.Abstractions;
 
 namespace RhSensoWebApi.Tests.Controllers

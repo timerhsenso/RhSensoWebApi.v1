@@ -1,11 +1,9 @@
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using RhSensoWebApi.API;
-using RhSensoWebApi.Infrastructure.Data.Context;
 using RhSensoWebApi.Core.Interfaces;
+using RhSensoWebApi.Infrastructure.Data.Context;
 using RhSensoWebApi.Tests.Common.Fakes;
 
 namespace RhSensoWebApi.Tests.Common;

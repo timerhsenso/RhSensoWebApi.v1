@@ -1,9 +1,4 @@
 ﻿#if DEBUG
-using System.Net;
-using System.Text.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
-using Xunit;
-
 namespace RhSensoWebApi.Tests
 {
     public class ErrorsResponseTests : IClassFixture<WebApplicationFactory<Program>>

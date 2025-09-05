@@ -1,5 +1,5 @@
-using RhSensoWebApi.Core.Entities;
 using RhSensoWebApi.Core.DTOs;
+using RhSensoWebApi.Core.Entities;
 
 namespace RhSensoWebApi.ExpandedTests.Fixtures;
 

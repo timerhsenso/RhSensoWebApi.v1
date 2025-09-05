@@ -1,5 +1,3 @@
-using System;
-
 namespace RhSensoWebApi.Core.Common.Exceptions
 {
     public class ConcurrencyException : Exception

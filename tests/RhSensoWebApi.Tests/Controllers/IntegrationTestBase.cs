@@ -1,12 +1,10 @@
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using RhSensoWebApi.Infrastructure.Data.Context;
 using RhSensoWebApi.Core.Entities;
+using RhSensoWebApi.Infrastructure.Data.Context;
 using System.Text;
-using System.Text.Json;
 
 namespace RhSensoWebApi.ExpandedTests.IntegrationTests.Infrastructure;
 
@@ -216,7 +214,7 @@ public abstract class IntegrationTestBase : IClassFixture<WebApplicationFactory<
     /// </summary>
     protected void AddAuthorizationHeader(string token)
     {
-        _client.DefaultRequestHeaders.Authorization = 
+        _client.DefaultRequestHeaders.Authorization =
             new System.Net.Http.Headers.AuthenticationHeaderValue("Bearer", token);
     }
 
@@ -240,7 +238,7 @@ public abstract class IntegrationTestBase : IClassFixture<WebApplicationFactory<
         };
 
         var response = await _client.PostAsync("/api/v1/auth/login", CreateJsonContent(loginRequest));
-        
+
         if (!response.IsSuccessStatusCode)
         {
             var errorContent = await response.Content.ReadAsStringAsync();

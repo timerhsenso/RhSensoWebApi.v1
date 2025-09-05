@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using RhSensoWebApi.Core.DTOs;
 using RhSensoWebApi.Core.Interfaces;
 

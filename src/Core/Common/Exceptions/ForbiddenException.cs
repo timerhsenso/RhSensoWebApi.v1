@@ -1,5 +1,3 @@
-using System;
-
 namespace RhSensoWebApi.Core.Common.Exceptions;
 
 /// <summary>403 Forbidden.</summary>

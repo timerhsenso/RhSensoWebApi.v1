@@ -17,7 +17,7 @@ public class User
     public string NormalizedUsername { get; set; } = string.Empty;
     public int IdFuncionario { get; set; }
     public bool FlNaoRecebeEmail { get; set; }
-    
+
     // Navigation Properties
     public ICollection<UserGroup> UserGroups { get; set; } = new List<UserGroup>();
 }

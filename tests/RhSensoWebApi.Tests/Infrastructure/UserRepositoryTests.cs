@@ -1,9 +1,9 @@
-using Microsoft.Extensions.Logging.Abstractions;
 using FluentAssertions;
-using RhSensoWebApi.Tests.Common;
+using Microsoft.Extensions.Logging.Abstractions;
+using RhSensoWebApi.Core.Entities;
 // AJUSTE: troque os usings/nomes conforme seus repositórios/entidades reais
 using RhSensoWebApi.Infrastructure.Data.Repositories;
-using RhSensoWebApi.Core.Entities;
+using RhSensoWebApi.Tests.Common;
 
 namespace RhSensoWebApi.Tests.Infrastructure;
 

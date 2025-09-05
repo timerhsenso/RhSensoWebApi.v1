@@ -1,8 +1,8 @@
-using System.Text.Json;
 using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using RhSensoWebApi.Core.Interfaces;
+using System.Text.Json;
 
 namespace RhSensoWebApi.Infrastructure.Cache;
 
@@ -11,7 +11,7 @@ public class CacheService : ICacheService
     private readonly IMemoryCache _memoryCache;
     private readonly IDistributedCache? _distributedCache;
     private readonly ILogger<CacheService> _logger;
-    
+
     public CacheService(
         IMemoryCache memoryCache,
         IDistributedCache? distributedCache,
@@ -21,7 +21,7 @@ public class CacheService : ICacheService
         _distributedCache = distributedCache;
         _logger = logger;
     }
-    
+
     public async Task<T?> GetAsync<T>(string key)
     {
         try
@@ -31,7 +31,7 @@ public class CacheService : ICacheService
             {
                 return value;
             }
-            
+
             // L2 Cache (Redis) - Para dados distribuídos
             if (_distributedCache != null)
             {
@@ -44,7 +44,7 @@ public class CacheService : ICacheService
                     return value;
                 }
             }
-            
+
             return default;
         }
         catch (Exception ex)
@@ -53,16 +53,16 @@ public class CacheService : ICacheService
             return default;
         }
     }
-    
+
     public async Task SetAsync<T>(string key, T value, TimeSpan? expiry = null)
     {
         try
         {
             var expiryTime = expiry ?? TimeSpan.FromMinutes(30);
-            
+
             // L1 Cache (Memory)
             _memoryCache.Set(key, value, expiryTime);
-            
+
             // L2 Cache (Redis)
             if (_distributedCache != null && value != null)
             {
@@ -79,13 +79,13 @@ public class CacheService : ICacheService
             _logger.LogError(ex, "Erro ao armazenar item no cache: {Key}", key);
         }
     }
-    
+
     public async Task RemoveAsync(string key)
     {
         try
         {
             _memoryCache.Remove(key);
-            
+
             if (_distributedCache != null)
             {
                 await _distributedCache.RemoveAsync(key);

@@ -1,8 +1,6 @@
+using RhSensoWebApi.Core.Common.Exceptions;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Logging;
-using RhSensoWebApi.Core.Common.Exceptions;
 
 namespace RhSensoWebApi.API.Middleware;
 

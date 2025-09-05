@@ -1,7 +1,6 @@
 using FluentAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using System.Text.Json;
 using RhSensoWebApi.API.Common; // OkResponse / FailResponse
 
 namespace RhSensoWebApi.Tests.Api;

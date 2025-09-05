@@ -1,5 +1,3 @@
-using System;
-
 namespace RhSensoWebApi.Core.Common.Exceptions;
 
 /// <summary>404 Not Found.</summary>

@@ -6,10 +6,8 @@ using Microsoft.AspNetCore.Mvc.Filters;
 using Microsoft.AspNetCore.Mvc.ModelBinding;
 using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
-using Moq;
 using RhSensoWebApi.API.Filters;
 using RhSensoWebApi.Core.Interfaces;
-using System.Net;
 
 namespace RhSensoWebApi.Tests.Filters;
 

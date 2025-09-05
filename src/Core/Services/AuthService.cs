@@ -1,7 +1,7 @@
 using Microsoft.Extensions.Logging;
-using RhSensoWebApi.Core.Interfaces;
-using RhSensoWebApi.Core.DTOs;
 using RhSensoWebApi.Core.Common.Exceptions;
+using RhSensoWebApi.Core.DTOs;
+using RhSensoWebApi.Core.Interfaces;
 
 namespace RhSensoWebApi.Core.Services;
 
@@ -12,7 +12,7 @@ public class AuthService : IAuthService
     private readonly ICacheService _cacheService;
     private readonly IPasswordHasher _passwordHasher;
     private readonly ILogger<AuthService> _logger;
-    
+
     public AuthService(
         IUserRepository userRepository,
         ITokenService tokenService,
@@ -26,13 +26,13 @@ public class AuthService : IAuthService
         _passwordHasher = passwordHasher;
         _logger = logger;
     }
-    
+
     public async Task<LoginResponse> LoginAsync(LoginRequest request)
     {
         try
         {
             _logger.LogInformation("Iniciando login para usuário: {Usuario}", request.CdUsuario);
-            
+
             // 1. Verificar se usuário existe
             var user = await _userRepository.GetByUsernameAsync(request.CdUsuario);
             if (user == null)
@@ -44,7 +44,7 @@ public class AuthService : IAuthService
                     Error = new ErrorDto { Code = "E001", Message = "Usuário Inválido" }
                 };
             }
-            
+
             // 2. Verificar se usuário está ativo
             if (!user.FlAtivo)
             {
@@ -55,7 +55,7 @@ public class AuthService : IAuthService
                     Error = new ErrorDto { Code = "E002", Message = "Usuário Inválido" }
                 };
             }
-            
+
             // 3. Verificar senha
             if (!_passwordHasher.VerifyPassword(request.Senha, user.SenhaUser))
             {
@@ -66,20 +66,20 @@ public class AuthService : IAuthService
                     Error = new ErrorDto { Code = "E003", Message = "Credenciais Inválidas" }
                 };
             }
-            
+
             // 4. Buscar permissões (com cache)
             var cacheKey = $"permissions:{user.CdUsuario}";
             var permissions = await _cacheService.GetAsync<List<PermissionDto>>(cacheKey);
-            
+
             if (permissions == null)
             {
                 permissions = await _userRepository.GetUserPermissionsAsync(user.CdUsuario);
                 await _cacheService.SetAsync(cacheKey, permissions, TimeSpan.FromMinutes(30));
             }
-            
+
             // 5. Gerar token JWT
             var token = _tokenService.GenerateToken(user, permissions);
-            
+
             // 6. Preparar resposta
             var userInfo = new UserInfoDto
             {
@@ -98,9 +98,9 @@ public class AuthService : IAuthService
                 IdFuncionario = user.IdFuncionario,
                 FlNaoRecebeEmail = user.FlNaoRecebeEmail
             };
-            
+
             _logger.LogInformation("Login realizado com sucesso para usuário: {Usuario}", request.CdUsuario);
-            
+
             return new LoginResponse
             {
                 Success = true,
@@ -122,40 +122,40 @@ public class AuthService : IAuthService
             };
         }
     }
-    
+
     public async Task<List<PermissionDto>> GetPermissionsAsync(string userId)
     {
         var cacheKey = $"permissions:{userId}";
         var permissions = await _cacheService.GetAsync<List<PermissionDto>>(cacheKey);
-        
+
         if (permissions == null)
         {
             permissions = await _userRepository.GetUserPermissionsAsync(userId);
             await _cacheService.SetAsync(cacheKey, permissions, TimeSpan.FromMinutes(30));
         }
-        
+
         return permissions;
     }
-    
+
     public async Task<bool> CheckHabilitacaoAsync(string userId, string sistema, string funcao)
     {
         var permissions = await GetPermissionsAsync(userId);
         return permissions.Any(p => p.CdSistema == sistema && p.CdFuncao == funcao);
     }
-    
+
     public async Task<bool> CheckBotaoAsync(string userId, string sistema, string funcao, string acao)
     {
         var permissions = await GetPermissionsAsync(userId);
         var permission = permissions.FirstOrDefault(p => p.CdSistema == sistema && p.CdFuncao == funcao);
-        
+
         return permission != null && permission.CdAcoes.Contains(acao);
     }
-    
+
     public async Task<char> CheckRestricaoAsync(string userId, string sistema, string funcao)
     {
         var permissions = await GetPermissionsAsync(userId);
         var permission = permissions.FirstOrDefault(p => p.CdSistema == sistema && p.CdFuncao == funcao);
-        
+
         return permission?.CdRestric ?? 'N'; // N = Nenhuma permissão
     }
 }

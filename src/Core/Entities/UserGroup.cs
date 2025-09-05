@@ -6,7 +6,7 @@ public class UserGroup
     public string CdGrUser { get; set; } = string.Empty;
     public string CdSistema { get; set; } = string.Empty; // FK
     public DateTime? DtFimVal { get; set; }
-    
+
     // Navigation Properties
     public User User { get; set; } = null!;
     public SystemEntity System { get; set; } = null!;

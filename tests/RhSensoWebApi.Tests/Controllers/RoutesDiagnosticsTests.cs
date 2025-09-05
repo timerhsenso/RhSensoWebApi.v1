@@ -1,7 +1,5 @@
 ﻿using Microsoft.AspNetCore.Routing;
 using Microsoft.Extensions.DependencyInjection;
-using System.Linq;
-using Xunit;
 using Xunit.Abstractions;
 
 namespace RhSensoWebApi.Tests.Integration

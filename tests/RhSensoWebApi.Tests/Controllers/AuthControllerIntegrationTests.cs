@@ -1,10 +1,7 @@
-using Microsoft.AspNetCore.Mvc.Testing;
-using System.Net;
-using Xunit;
 using FluentAssertions;
-using RhSensoWebApi.ExpandedTests.IntegrationTests.Infrastructure;
-using RhSensoWebApi.Core.DTOs;
 using RhSensoWebApi.Core.Common.Exceptions;
+using RhSensoWebApi.Core.DTOs;
+using RhSensoWebApi.ExpandedTests.IntegrationTests.Infrastructure;
 
 namespace RhSensoWebApi.ExpandedTests.IntegrationTests.Controllers;
 
