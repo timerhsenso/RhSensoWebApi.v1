@@ -1,9 +1,11 @@
 using System;
 
-namespace RhSensoWebApi.Core.Common.Exceptions
+namespace RhSensoWebApi.Core.Common.Exceptions;
+
+/// <summary>403 Forbidden.</summary>
+public sealed class ForbiddenException : AppException
 {
-    public class ForbiddenException : Exception
-    {
-        public ForbiddenException(string message) : base(message) { }
-    }
+    public ForbiddenException(string message = "Acesso negado", string errorCode = "FORBIDDEN")
+        : base(403, errorCode, message)
+    { }
 }

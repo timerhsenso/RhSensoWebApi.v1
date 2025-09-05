@@ -1,3 +1,6 @@
+using System;
+using System.Collections.Generic;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using RhSensoWebApi.Core.Common.Exceptions;
 
@@ -5,6 +8,7 @@ namespace RhSensoWebApi.API.Common;
 
 public static class ControllerResponseExtensions
 {
+    // 200 OK padrão com envelope
     public static IActionResult OkResponse<T>(this ControllerBase c, T data, string? message = null)
     {
         var resp = new BaseResponse<T>
@@ -14,16 +18,14 @@ public static class ControllerResponseExtensions
             Data = data,
             Error = null,
             Errors = null,
-            TraceId = GetTraceId(c)
+            TraceId = c?.HttpContext?.TraceIdentifier ?? Guid.NewGuid().ToString("N"),
+            Timestamp = DateTime.UtcNow
         };
 
         return new ObjectResult(resp) { StatusCode = StatusCodes.Status200OK };
     }
 
-    /// <summary>
-    /// Erros gerais (401/403/404/409/500...). Se precisar passar erros por campo, use o parâmetro 'errors'
-    /// ou crie uma sobrecarga específica para validação.
-    /// </summary>
+    // Erros gerais (401/403/404/409/500...). Assinatura: (statusCode, message, code?, errors?)
     public static IActionResult FailResponse(
         this ControllerBase c,
         int statusCode,
@@ -36,37 +38,37 @@ public static class ControllerResponseExtensions
             Success = false,
             Message = message,
             Data = null,
-            // só popula Error se tiver 'code' (boa prática: código de erro curto)
             Error = code is null ? null : new ErrorDto { Code = code, Message = message },
-            // só popula Errors quando existir e tiver itens (não fabricar dict vazio)
             Errors = (errors is not null && errors.Count > 0) ? errors : null,
-            TraceId = GetTraceId(c)
+            TraceId = c?.HttpContext?.TraceIdentifier ?? Guid.NewGuid().ToString("N"),
+            Timestamp = DateTime.UtcNow
         };
 
         return new ObjectResult(resp) { StatusCode = statusCode };
     }
 
-    /// <summary>
-    /// Atalho específico para erros de validação (400), evita setar 'Error' e garante 'Errors'.
-    /// </summary>
+    // Erros de validação (400) — retorna 'error' + 'errors'
     public static IActionResult FailValidation(
         this ControllerBase c,
         IDictionary<string, string[]> errors,
         string? message = null)
     {
+        if (errors is null || errors.Count == 0)
+            throw new ArgumentException("Validation errors cannot be empty.", nameof(errors));
+
+        var msg = message ?? "Erro de validação";
+
         var resp = new BaseResponse<object?>
         {
             Success = false,
-            Message = message ?? "Erro de validação",
+            Message = msg,
             Data = null,
-            Error = null,
-            Errors = (errors is not null && errors.Count > 0) ? errors : null,
-            TraceId = GetTraceId(c)
+            Error = new ErrorDto { Code = "VALIDATION_ERROR", Message = msg },
+            Errors = errors,
+            TraceId = c?.HttpContext?.TraceIdentifier ?? Guid.NewGuid().ToString("N"),
+            Timestamp = DateTime.UtcNow
         };
 
         return new ObjectResult(resp) { StatusCode = StatusCodes.Status400BadRequest };
     }
-
-    private static string GetTraceId(ControllerBase c)
-        => c?.HttpContext?.TraceIdentifier ?? Guid.NewGuid().ToString("N");
 }
