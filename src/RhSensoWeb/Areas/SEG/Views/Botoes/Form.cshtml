@@ -1,0 +1,54 @@
+
+@model RhSenso.Shared.SEG.Botoes.BotaoFormDto
+@{
+    var isEdit = !string.IsNullOrWhiteSpace(Model?.CodigoSistema) && !string.IsNullOrWhiteSpace(Model?.CodigoFuncao) && !string.IsNullOrWhiteSpace(Model?.Nome);
+    ViewData["Title"] = isEdit ? "Editar Botão" : "Novo Botão";
+    Layout = "_Layout";
+}
+<form method="post" asp-action="@(isEdit ? "Edit" : "Create")"
+      asp-route-sistema="@Model?.CodigoSistema" asp-route-funcao="@Model?.CodigoFuncao" asp-route-nome="@Model?.Nome">
+  @Html.AntiForgeryToken()
+  <div class="card">
+    <div class="card-header d-flex justify-content-between">
+      <h5 class="mb-0">@ViewData["Title"]</h5>
+      <div class="d-flex gap-2">
+        <button type="submit" class="btn btn-primary"><i class="fa fa-save"></i> Salvar</button>
+        <a class="btn btn-secondary" href="@Url.Action("Index")">Voltar</a>
+      </div>
+    </div>
+    <div class="card-body">
+      <div class="row g-3">
+        <div class="col-md-3">
+          <label class="form-label">Sistema</label>
+          <input asp-for="CodigoSistema" class="form-control" maxlength="10" @(isEdit ? "readonly" : "") />
+          <span asp-validation-for="CodigoSistema" class="text-danger"></span>
+        </div>
+        <div class="col-md-5">
+          <label class="form-label">Função</label>
+          <input asp-for="CodigoFuncao" class="form-control" maxlength="30" @(isEdit ? "readonly" : "") />
+          <span asp-validation-for="CodigoFuncao" class="text-danger"></span>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Nome do Botão</label>
+          <input asp-for="Nome" class="form-control" maxlength="30" @(isEdit ? "readonly" : "") />
+          <span asp-validation-for="Nome" class="text-danger"></span>
+        </div>
+
+        <div class="col-md-8">
+          <label class="form-label">Descrição</label>
+          <input asp-for="Descricao" class="form-control" maxlength="60" />
+          <span asp-validation-for="Descricao" class="text-danger"></span>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label">Ação</label>
+          <input asp-for="Acao" class="form-control" maxlength="1" />
+          <div class="form-text">Uma letra (ex.: A,C,E,I...).</div>
+          <span asp-validation-for="Acao" class="text-danger"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+</form>
+@section Scripts{
+  <partial name="_ValidationScriptsPartial" />
+}

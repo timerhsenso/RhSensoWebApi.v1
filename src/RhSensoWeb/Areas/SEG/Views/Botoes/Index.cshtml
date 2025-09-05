@@ -1,0 +1,68 @@
+
+@{
+    ViewData["Title"] = "Botões";
+    Layout = "_Layout";
+}
+<div class="card">
+  <div class="card-header d-flex align-items-center justify-content-between">
+    <h5 class="mb-0">Botões</h5>
+    <div class="d-flex gap-2">
+      <input id="fSistema" class="form-control form-control-sm" placeholder="Sistema (ex: SEG)" style="width:140px" />
+      <input id="fFuncao" class="form-control form-control-sm" placeholder="Função (ex: USUARIO)" style="width:180px" />
+      <a class="btn btn-primary" href="@Url.Action("Create")"><i class="fa fa-plus"></i> Novo</a>
+    </div>
+  </div>
+  <div class="card-body">
+    <table id="grid" class="table table-striped w-100">
+      <thead>
+        <tr>
+          <th>Código Sistema</th>
+          <th>Código Função</th>
+          <th>Nome</th>
+          <th>Descrição</th>
+          <th>Ação</th>
+          <th style="width:1%"></th>
+        </tr>
+      </thead>
+    </table>
+  </div>
+</div>
+
+@section Scripts{
+<script>
+  const grid = $('#grid').DataTable({
+    processing: true, serverSide: true, searching: true,
+    order: [[0,'asc'],[1,'asc'],[2,'asc']],
+    ajax: {
+      url: '@Url.Action("List")',
+      data: function(d){
+        d.sistema = $('#fSistema').val();
+        d.funcao  = $('#fFuncao').val();
+        d.search  = d.search.value;
+        const colMap = {0:'CodigoSistema',1:'CodigoFuncao',2:'Nome',3:'Descricao',4:'Acao'};
+        d.orderColumn = colMap[d.order[0].column] ?? 'CodigoSistema';
+        d.orderDir = d.order[0].dir;
+      }
+    },
+    columns: [
+      { data:'codigoSistema' },
+      { data:'codigoFuncao' },
+      { data:'nome' },
+      { data:'descricao' },
+      { data:'acao' },
+      {
+        data:null, orderable:false, searchable:false,
+        render:(d,t,r)=>`
+          <div class="btn-group">
+            <a class="btn btn-sm btn-secondary" href="@Url.Content("~/SEG/Botoes/edit/")${r.codigoSistema}/${r.codigoFuncao}/${r.nome}"><i class="fa fa-edit"></i></a>
+            <form method="post" action="@Url.Content("~/SEG/Botoes/delete/")${r.codigoSistema}/${r.codigoFuncao}/${r.nome}" onsubmit="return confirm('Excluir registro?')">
+              @Html.AntiForgeryToken()
+              <button class="btn btn-sm btn-danger"><i class="fa fa-trash"></i></button>
+            </form>
+          </div>`
+      }
+    ]
+  });
+  $('#fSistema,#fFuncao').on('change keyup', ()=> grid.ajax.reload());
+</script>
+}

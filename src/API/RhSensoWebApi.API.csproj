@@ -27,6 +27,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Core\RhSensoWebApi.Core.csproj" />
     <ProjectReference Include="..\Infrastructure\RhSensoWebApi.Infrastructure.csproj" />
+    <ProjectReference Include="..\RhSenso.Shared\RhSenso.Shared.csproj" />
   </ItemGroup>
 
 </Project>

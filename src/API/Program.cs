@@ -51,6 +51,10 @@ using System.Linq;                                 // Where/ToDictionary
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using RhSensoWebApi.Core.Abstractions.SEG.Botoes;
+using RhSensoWebApi.Infrastructure;
+using Microsoft.EntityFrameworkCore;
+using RhSensoWebApi.Infrastructure.Data.Context;
 
 var builder = WebApplication.CreateBuilder(args);
 

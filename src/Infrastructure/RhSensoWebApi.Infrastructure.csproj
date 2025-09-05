@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Core\RhSensoWebApi.Core.csproj" />
+    <ProjectReference Include="..\RhSenso.Shared\RhSenso.Shared.csproj" />
   </ItemGroup>
 
 </Project>
