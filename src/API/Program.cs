@@ -1,29 +1,29 @@
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Linq;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Mvc;                    // <- Necessário p/ InvalidModelStateResponseFactory
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;               // <— precisa deste using
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
-using Serilog;
-using Serilog.Events;
-
-using RhSensoWebApi.Infrastructure.Data.Context;
-using RhSensoWebApi.Core.Interfaces;
-using RhSensoWebApi.Core.Services;
-using RhSensoWebApi.Infrastructure.Services;
-using RhSensoWebApi.Infrastructure.Data.Repositories;
-using RhSensoWebApi.Infrastructure.Cache;
-
-using Microsoft.Extensions.Logging; // <— precisa deste using
-
 // Middlewares próprios
 using RhSensoWebApi.API.Middleware;
-
+// Swagger (SchemaFilters de exemplo)
+using RhSensoWebApi.API.Swagger;
 // BaseResponse / ErrorDto (seu tipo atual no Core)
-using RhSensoWebApi.Core.Common.Exceptions;        // BaseResponse, ErrorDto
+using RhSensoWebApi.Core.Common.Exceptions;       // BaseResponse, ErrorDto
+using RhSensoWebApi.Core.Interfaces;
+using RhSensoWebApi.Core.Services;
+using RhSensoWebApi.Infrastructure.Cache;
+using RhSensoWebApi.Infrastructure.Data.Context;
+using RhSensoWebApi.Infrastructure.Data.Repositories;
+using RhSensoWebApi.Infrastructure.Services;
+using Serilog;
+using Serilog.Events;
+using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -43,7 +43,7 @@ builder.Host.UseSerilog((context, config) =>
             retainedFileCountLimit: 30));
 
 // =========================================================
-// SERVICES (DI) — tudo ANTES do Build()
+/* SERVICES (DI) — tudo ANTES do Build() */
 // =========================================================
 
 // Controllers + JSON
@@ -75,14 +75,13 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
         {
             Success = false,
             Message = "Falha de validação.",
-            Errors = errors,                                   // dicionário por campo
-            TraceId = context.HttpContext.TraceIdentifier      // traceId no corpo
+            Errors = errors,                                // dicionário por campo
+            TraceId = context.HttpContext.TraceIdentifier    // traceId no corpo
         };
 
         return new BadRequestObjectResult(resp);
     };
 });
-
 
 // Database  usar em produção 
 /*
@@ -122,7 +121,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         // Em produção, deixe true; para desenvolvimento mantemos false.
-        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment() ? true : false;
+        options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
         options.SaveToken = true;
         options.TokenValidationParameters = new TokenValidationParameters
         {
@@ -171,6 +170,10 @@ builder.Services.AddSwaggerGen(c =>
             Array.Empty<string>()
         }
     });
+
+    // Exemplos (Item 0) — se você adicionou os SchemaFilters no projeto
+    c.SchemaFilter<ErrorDtoSchemaExample>();
+    c.SchemaFilter<BaseResponseSchemaExample>();
 });
 
 // CORS
@@ -184,8 +187,11 @@ builder.Services.AddCors(options =>
             .AllowAnyHeader());
 });
 
-// Health Checks
+// Health Checks (separa liveness e readiness)
 builder.Services.AddHealthChecks()
+    // liveness (auto-healthy): usado em /health
+    .AddCheck("self", () => HealthCheckResult.Healthy())
+    // readiness: depende do banco, usado em /health/ready
     .AddDbContextCheck<AppDbContext>();
 
 // Dependency Injection
@@ -196,12 +202,12 @@ builder.Services.AddScoped<ICacheService, CacheService>();
 builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 
 // =========================================================
-// BUILD — a partir daqui temos o 'app'
+/* BUILD — a partir daqui temos o 'app' */
 // =========================================================
 var app = builder.Build();
 
 // =========================================================
-// PIPELINE (middlewares) — tudo DEPOIS do Build()
+/* PIPELINE (middlewares) — tudo DEPOIS do Build() */
 // =========================================================
 
 // Swagger
@@ -216,14 +222,19 @@ else
     app.UseHsts(); // HSTS apenas em produção
 }
 
+// HTTPS redirection (mantém como estava quando passou 19/19)
 app.UseHttpsRedirection();
 
-// Middlewares próprios (ordem importa):
+/*
+ * ORDEM QUE PASSOU 19/19:
+ * 1) Logging de request/response
+ * 2) ExceptionHandlingMiddleware (padroniza qualquer exceção que ocorra depois)
+ */
+
 // 1) Logging (request/response)
 app.UseMiddleware<RequestLoggingMiddleware>();
 
 // 2) Tratamento global de exceções (Item 0)
-//    IMPORTANTE: deve ficar DEPOIS do Build() e ANTES de auth.
 app.UseMiddleware<ExceptionHandlingMiddleware>();
 
 // CORS
@@ -234,7 +245,17 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // Health Checks
-app.MapHealthChecks("/health");
+// /health  -> liveness (sem dependências) -> deve responder 200 em testes
+app.MapHealthChecks("/health", new HealthCheckOptions
+{
+    Predicate = r => r.Name == "self"
+});
+
+// /health/ready -> readiness (todas as dependências) -> pode responder 503 se DB falhar
+app.MapHealthChecks("/health/ready", new HealthCheckOptions
+{
+    Predicate = _ => true
+});
 
 // Controllers
 app.MapControllers();

@@ -1,13 +1,19 @@
 using System.Net;
 using System.Text.Json;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Http;
+using Microsoft.Data.SqlClient;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
+
+// Usa a SUA BaseResponse oficial
 using RhSensoWebApi.Core.Common.Exceptions;
 
 namespace RhSensoWebApi.API.Middleware
 {
-    public class ExceptionHandlingMiddleware
+    /// <summary>
+    /// Middleware global de exceções que devolve sempre o formato padronizado do seu BaseResponse.
+    /// </summary>
+    public sealed class ExceptionHandlingMiddleware
     {
         private readonly RequestDelegate _next;
         private readonly ILogger<ExceptionHandlingMiddleware> _logger;
@@ -18,68 +24,106 @@ namespace RhSensoWebApi.API.Middleware
             _logger = logger;
         }
 
-        public async Task Invoke(HttpContext context)
+        public async Task Invoke(HttpContext ctx)
         {
             try
             {
-                await _next(context);
+                await _next(ctx);
             }
             catch (Exception ex)
             {
-                await HandleExceptionAsync(context, ex, _logger);
+                var (status, message, errors) = MapException(ex);
+
+                // Warning para erros esperados; Error para os demais
+                var level =
+                    status is HttpStatusCode.BadRequest
+                    or HttpStatusCode.Unauthorized
+                    or HttpStatusCode.Forbidden
+                    or HttpStatusCode.NotFound
+                    or HttpStatusCode.Conflict
+                    ? LogLevel.Warning
+                    : LogLevel.Error;
+
+                _logger.Log(level, ex, "Handled exception mapped to {StatusCode}", (int)status);
+
+                ctx.Response.ContentType = "application/json";
+                ctx.Response.StatusCode = (int)status;
+
+                // Usa sua BaseResponse do Core (sem ErrorDto)
+                var payload = new BaseResponse<object>
+                {
+                    Success = false,
+                    Message = message,
+                    Errors = errors,                   // dicionário por campo (quando houver)
+                    TraceId = ctx.TraceIdentifier,      // traceId no corpo
+                    Timestamp = DateTime.UtcNow           // seu Timestamp é DateTime
+                };
+
+                var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                });
+
+                await ctx.Response.WriteAsync(json);
             }
         }
 
-        private static async Task HandleExceptionAsync(HttpContext ctx, Exception ex, ILogger logger)
+        private static (HttpStatusCode status, string message, Dictionary<string, string[]>? errors)
+            MapException(Exception ex)
         {
-            var traceId = ctx.TraceIdentifier;
-            var (status, message, code, errors) = MapException(ex);
+            // 400 com dicionário de validação (sem depender de FluentValidation)
+            if (ex is AppValidationException avx)
+                return (HttpStatusCode.BadRequest, avx.Message, avx.Errors);
 
-            logger.LogError(ex, "Unhandled exception. Status: {StatusCode} TraceId: {TraceId} Msg: {Message}",
-                (int)status, traceId, message);
+            if (ex is UnauthorizedAccessException)
+                return (HttpStatusCode.Unauthorized, "Acesso não autorizado.", null);
 
-            ctx.Response.ContentType = "application/json";
-            ctx.Response.StatusCode = (int)status;
+            if (ex is ForbiddenException)
+                return (HttpStatusCode.Forbidden, "Acesso proibido.", null);
 
-            var payload = new BaseResponse<object>
+            if (ex is KeyNotFoundException)
+                return (HttpStatusCode.NotFound, "Recurso não encontrado.", null);
+
+            if (ex is DbUpdateConcurrencyException)
+                return (HttpStatusCode.Conflict, "Conflito de concorrência ao atualizar o recurso.", null);
+
+            if (ex is DbUpdateException dbex)
             {
-                Success = false,
-                Message = message,
-                Error = new ErrorDto { Code = code, Message = message },
-                Errors = errors,
-                TraceId = traceId
-            };
+                // Regras por SqlException (SQL Server)
+                if (dbex.InnerException is SqlException sqlEx)
+                {
+                    // 2627/2601 → unicidade
+                    if (sqlEx.Number == 2627 || sqlEx.Number == 2601)
+                        return (HttpStatusCode.Conflict, "Violação de unicidade do recurso.", null);
 
-            var json = JsonSerializer.Serialize(payload, new JsonSerializerOptions
-            {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-                WriteIndented = false
-            });
+                    // 547 → FK/Check
+                    if (sqlEx.Number == 547)
+                        return (HttpStatusCode.BadRequest, "Violação de integridade referencial.", null);
+                }
 
-            await ctx.Response.WriteAsync(json);
-        }
-
-        private static (HttpStatusCode status, string message, string code, IDictionary<string, string[]>? errors) MapException(Exception ex)
-        {
-            switch (ex)
-            {
-                case ValidationException vex:
-                    return (HttpStatusCode.BadRequest, "Falha de validação.", nameof(HttpStatusCode.BadRequest), vex.Errors);
-                case UnauthorizedAccessException uex:
-                    return (HttpStatusCode.Unauthorized, string.IsNullOrWhiteSpace(uex.Message) ? "Não autorizado." : uex.Message, nameof(HttpStatusCode.Unauthorized), null);
-                case ForbiddenException fex:
-                    return (HttpStatusCode.Forbidden, string.IsNullOrWhiteSpace(fex.Message) ? "Acesso proibido." : fex.Message, nameof(HttpStatusCode.Forbidden), null);
-                case NotFoundException nex:
-                    return (HttpStatusCode.NotFound, string.IsNullOrWhiteSpace(nex.Message) ? "Recurso não encontrado." : nex.Message, nameof(HttpStatusCode.NotFound), null);
-                case ConcurrencyException cex:
-                    return (HttpStatusCode.Conflict, string.IsNullOrWhiteSpace(cex.Message) ? "Conflito de concorrência." : cex.Message, nameof(HttpStatusCode.Conflict), null);
-                case DbUpdateConcurrencyException:
-                    return (HttpStatusCode.Conflict, "Conflito de concorrência no banco de dados.", nameof(HttpStatusCode.Conflict), null);
-                case DbUpdateException:
-                    return (HttpStatusCode.BadRequest, "Falha ao persistir alterações no banco de dados.", nameof(HttpStatusCode.BadRequest), null);
-                default:
-                    return (HttpStatusCode.InternalServerError, "Erro interno do servidor.", nameof(HttpStatusCode.InternalServerError), null);
+                // Fallback
+                return (HttpStatusCode.BadRequest, "Falha ao persistir dados no banco de dados.", null);
             }
+
+            return (HttpStatusCode.InternalServerError, "Erro interno do servidor.", null);
         }
+    }
+
+    /// <summary>Exceção leve para validação com dicionário de erros.</summary>
+    public sealed class AppValidationException : Exception
+    {
+        public Dictionary<string, string[]> Errors { get; }
+
+        public AppValidationException(string message, Dictionary<string, string[]> errors)
+            : base(message)
+        {
+            Errors = errors;
+        }
+    }
+
+    /// <summary>Exceção leve para 403.</summary>
+    public sealed class ForbiddenException : Exception
+    {
+        public ForbiddenException(string? message = null) : base(message ?? "Acesso proibido.") { }
     }
 }

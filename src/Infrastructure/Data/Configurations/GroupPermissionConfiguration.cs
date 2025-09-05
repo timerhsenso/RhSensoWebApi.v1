@@ -31,12 +31,12 @@ public class GroupPermissionConfiguration : IEntityTypeConfiguration<GroupPermis
         builder.Property(x => x.CdRestric)
             .HasColumnName("cdrestric")
             .HasMaxLength(1);
-            
+
         // Relacionamento
-        builder.HasOne(x => x.UserGroup)
-            .WithMany(x => x.GroupPermissions)
-            .HasForeignKey(x => new { x.CdGrUser, x.CdSistema });
-            
+        // Navegação ignorada para evitar FK (CdGrUser, CdSistema) incompatível com PK (CdUsuario, CdGrUser, CdSistema)
+        builder.Ignore(x => x.UserGroup);
+
+
         // Índices
         builder.HasIndex(x => new { x.CdGrUser, x.CdSistema });
         builder.HasIndex(x => x.CdFuncao);
