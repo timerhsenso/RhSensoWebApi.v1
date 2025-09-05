@@ -1,21 +1,23 @@
-namespace RhSensoWebApi.Core.Common.Exceptions;
+using System.Text.Json.Serialization;
 
-// (Opcional futuro: mover para RhSensoWebApi.Core.Common.Responses)
+namespace RhSensoWebApi.Core.Common.Exceptions;
 
 public class BaseResponse<T>
 {
     public bool Success { get; set; }
-    public string? Message { get; set; }                            // NOVO
+    public string? Message { get; set; }
     public T? Data { get; set; }
 
-    // Para erros “genéricos” (não-por-campo), mantendo retrocompatibilidade:
-    public ErrorDto? Error { get; set; }                            // EXISTENTE
+    // Erro "geral" (401/403/404/409/500). Omitir quando nulo.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public ErrorDto? Error { get; set; }
 
-    // Para erros de validação (por-campo). Use null quando não for validação:
-    public IDictionary<string, string[]>? Errors { get; set; }      // NOVO
+    // Erros de validação por campo (400). Omitir quando nulo.
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public IDictionary<string, string[]>? Errors { get; set; }
 
-    // Rastreabilidade ponta-a-ponta:
-    public string TraceId { get; set; } = string.Empty;             // NOVO
+    // Rastreabilidade
+    public string TraceId { get; set; } = string.Empty;
 
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
 }
