@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using RhSensoWebApi.Core.Entities;
+using RhSensoWebApi.Core.Entities.SEG;
 using RhSensoWebApi.Infrastructure.Data.Context;
 using System.Text;
 
@@ -120,14 +121,15 @@ public abstract class IntegrationTestBase : IClassFixture<WebApplicationFactory<
         context.Users.AddRange(users);
 
         // Criar sistemas de teste
-        var systems = new List<SystemEntity>
+        var systems = new List<Sistema>
         {
-            new() { CdSistema = "SYS01", Nome = "Sistema de Teste 1" },
-            new() { CdSistema = "SYS02", Nome = "Sistema de Teste 2" }
+            new() { CdSistema = "SYS01", Descricao = "Sistema de Teste 1" },
+            new() { CdSistema = "SYS02", Descricao = "Sistema de Teste 2" }
         };
 
-        context.Systems.AddRange(systems);
+        context.Sistemas.AddRange(systems);
 
+        
         // Criar grupos de usuários
         var userGroups = new List<UserGroup>
         {

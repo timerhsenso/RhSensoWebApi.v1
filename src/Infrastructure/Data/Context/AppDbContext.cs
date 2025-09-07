@@ -1,6 +1,6 @@
 using Microsoft.EntityFrameworkCore;
-using RhSensoWebApi.Core.Entities;       // User, UserGroup, SystemEntity, GroupPermission
-using RhSensoWebApi.Core.Entities.SEG;   // Botao
+using RhSensoWebApi.Core.Entities;
+using RhSensoWebApi.Core.Entities.SEG;
 
 namespace RhSensoWebApi.Infrastructure.Data.Context;
 
@@ -10,16 +10,18 @@ public class AppDbContext : DbContext
 
     public DbSet<User> Users => Set<User>();
     public DbSet<UserGroup> UserGroups => Set<UserGroup>();
-    public DbSet<SystemEntity> Systems => Set<SystemEntity>();
     public DbSet<GroupPermission> GroupPermissions => Set<GroupPermission>();
 
-    // Adicione o DbSet do módulo de Botões
+    // *** ÚNICO DbSet correto ***
+    public DbSet<Sistema> Sistemas => Set<Sistema>();
+
     public DbSet<Botao> Botoes => Set<Botao>();
+
+    public DbSet<Usuario> Usuarios => Set<Usuario>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        // Carrega TODAS as IEntityTypeConfiguration<T> deste assembly
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
     }
 }

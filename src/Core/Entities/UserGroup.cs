@@ -1,3 +1,5 @@
+using RhSensoWebApi.Core.Entities.SEG;
+
 namespace RhSensoWebApi.Core.Entities;
 
 public class UserGroup
@@ -9,7 +11,7 @@ public class UserGroup
 
     // Navigation Properties
     public User User { get; set; } = null!;
-    public SystemEntity System { get; set; } = null!;
+    public Sistema Sistema { get; set; } = null!;        // <— era SystemEntity
     public ICollection<GroupPermission> GroupPermissions { get; set; } = new List<GroupPermission>();
 }
 

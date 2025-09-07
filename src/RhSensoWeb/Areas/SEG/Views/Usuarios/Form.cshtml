@@ -1,0 +1,33 @@
+@model string
+@{
+    ViewData["Title"] = string.IsNullOrEmpty(Model) ? "Novo Usuário" : $"Editar Usuário: {Model}";
+}
+<section class="container my-4" data-id="@Model">
+    <h2 class="mb-3">@ViewData["Title"]</h2>
+    <form id="frmUsuario" class="row g-3">
+        <div class="col-md-3"><label class="form-label">Login</label><input id="Codigo" class="form-control" maxlength="30" required @(string.IsNullOrEmpty(Model) ? "" : "readonly") /></div>
+        <div class="col-md-5"><label class="form-label">Nome</label><input id="Descricao" class="form-control" maxlength="50" required /></div>
+        <div class="col-md-2"><label class="form-label">Tipo</label><select id="Tipo" class="form-select" required><option value="0">Prestador</option><option value="1" selected>Empregado</option></select></div>
+        <div class="col-md-2"><label class="form-label">Situação</label><select id="Ativo" class="form-select" required><option value="S" selected>Ativo</option><option value="N">Inativo</option></select></div>
+        <div class="col-md-3"><label class="form-label">Senha</label><input id="SenhaUser" class="form-control" maxlength="20" /></div>
+        <div class="col-md-5"><label class="form-label">Nome p/ Cheque</label><input id="NomeImpCheque" class="form-control" maxlength="50" /></div>
+        <div class="col-md-2"><label class="form-label">Matrícula</label><input id="NoMatric" class="form-control" maxlength="8" /></div>
+        <div class="col-md-2"><label class="form-label">Não recebe e-mail</label><select id="FlNaoRecebeEmail" class="form-select"><option value="">(não informado)</option><option value="S">Sim</option><option value="N">Não</option></select></div>
+        <div class="col-md-3"><label class="form-label">Empresa</label><input id="CdEmpresa" class="form-control" type="number" /></div>
+        <div class="col-md-3"><label class="form-label">Filial</label><input id="CdFilial" class="form-control" type="number" /></div>
+        <div class="col-md-2"><label class="form-label">NoUser</label><input id="NoUser" class="form-control" type="number" required /></div>
+        <div class="col-md-4"><label class="form-label">E-mail</label><input id="Email" class="form-control" type="email" maxlength="100" /></div>
+        <div class="col-md-3"><label class="form-label">NormalizedUserName</label><input id="NormalizedUserName" class="form-control" maxlength="30" /></div>
+        <div class="col-md-5"><label class="form-label">Id Funcionário (GUID)</label><input id="IdFuncionario" class="form-control" /></div>
+        @if (!string.IsNullOrEmpty(Model)) { <div class="col-md-4"><label class="form-label">Id (GUID)</label><input id="Id" class="form-control" readonly /></div> }
+    </form>
+    <div class="mt-3 d-flex gap-2">
+        <button id="btnSalvar" class="btn btn-primary">Salvar</button>
+        <a class="btn btn-secondary" href="@Url.Action("Index")">Voltar</a>
+        @if (!string.IsNullOrEmpty(Model)) {
+            <button id="btnReset" class="btn btn-outline-warning">Redefinir senha</button>
+            <button id="btnExcluir" class="btn btn-outline-danger">Excluir</button>
+        }
+    </div>
+</section>
+@section Scripts { <script src="~/js/seg/usuarios-form.js"></script> }

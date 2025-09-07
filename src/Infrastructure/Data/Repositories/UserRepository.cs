@@ -44,7 +44,7 @@ public class UserRepository : IUserRepository
                     u => new { u.CdGrUser, u.CdSistema },
                     h => new { h.CdGrUser, h.CdSistema },
                     (u, h) => new { UserGroup = u, Permission = h })
-                .Join(_context.Systems,
+                .Join(_context.Sistemas,
                     uh => uh.UserGroup.CdSistema,
                     s => s.CdSistema,
                     (uh, s) => new { uh.UserGroup, uh.Permission, System = s })

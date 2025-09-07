@@ -32,7 +32,7 @@ public class UserGroupConfiguration : IEntityTypeConfiguration<UserGroup>
             .WithMany(x => x.UserGroups)
             .HasForeignKey(x => x.CdUsuario);
 
-        builder.HasOne(x => x.System)
+        builder.HasOne(x => x.Sistema)
             .WithMany(x => x.UserGroups)
             .HasForeignKey(x => x.CdSistema);
 

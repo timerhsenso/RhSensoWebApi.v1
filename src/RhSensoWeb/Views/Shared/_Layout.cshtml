@@ -7,6 +7,19 @@
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/RhSensoWeb.styles.css" asp-append-version="true" />
+
+    <script>
+  // Não engole erro do DataTables
+  $.fn.dataTable.ext.errMode = 'none';
+
+  // Hook global para logar erros de XHR
+  $(document).on('error.dt', function (e, settings, techNote, message) {
+    console.error('DataTables error:', message);
+    alert("Erro no grid: " + message);
+  });
+</script>
+
+
 </head>
 <body>
     <header>

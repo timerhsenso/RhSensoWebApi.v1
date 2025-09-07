@@ -1,0 +1,27 @@
+@{
+    ViewData["Title"] = "Sistemas";
+}
+<section class="container my-4">
+    <h2 class="mb-3">Sistemas</h2>
+    <table class="table table-striped" id="grid">
+        <thead>
+            <tr><th>Código</th><th>Descrição</th></tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</section>
+@section Scripts {
+<script>
+(async function(){
+  const res = await fetch("@Url.Action("GetData")");
+  const json = await res.json();
+  const grid = document.querySelector("#grid tbody");
+  grid.innerHTML = "";
+  for(const row of json.data){
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${row.codigo}</td><td>${row.descricao}</td>`;
+    grid.appendChild(tr);
+  }
+})();
+</script>
+}

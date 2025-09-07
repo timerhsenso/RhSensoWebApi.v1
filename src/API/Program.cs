@@ -59,6 +59,13 @@ using RhSensoWebApi.Infrastructure.Data.Context;
 using RhSensoWebApi.Core.Abstractions.SEG.Botoes;
 using RhSensoWebApi.Infrastructure.Services.SEG.Botoes;
 
+using RhSensoWebApi.Core.Abstractions.SEG.Sistemas;
+using RhSensoWebApi.Infrastructure.Services.SEG.Sistemas;
+using RhSensoWebApi.Core.Entities.SEG;
+using RhSensoWebApi.Core.Abstractions.SEG.Usuarios;
+using RhSensoWebApi.Infrastructure.Services.SEG.Usuarios;
+
+
 
 
 
@@ -304,7 +311,9 @@ builder.Services.AddScoped<ICacheService, CacheService>();
 builder.Services.AddScoped<RhSensoWebApi.Core.Interfaces.IPasswordHasher, RhSensoWebApi.Infrastructure.Services.PasswordHasher>();
 
 builder.Services.AddScoped<IBotoesService, BotoesService>();
+builder.Services.AddScoped<ISistemasService, SistemasService>();
 
+builder.Services.AddScoped<IUsuariosService, UsuariosService>();
 
 // -------------------------
 // Fail-fast de produção (não sobe sem segredos mínimos)

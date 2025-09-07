@@ -1,0 +1,32 @@
+@{
+    ViewData["Title"] = "Usuários";
+}
+<section class="container my-4">
+    <div class="d-flex align-items-center gap-3">
+        <h2 class="mb-0">Usuários</h2>
+        <label class="form-check-label">
+            <input id="chkInativos" type="checkbox" class="form-check-input"/> Exibir inativos
+        </label>
+        <a class="btn btn-primary" href="@Url.Action("Form")">Novo</a>
+        <button id="btnResetMany" class="btn btn-outline-secondary">Redefinir senha (seleção)</button>
+    </div>
+    <hr/>
+    <table class="table table-striped" id="grid">
+        <thead>
+            <tr>
+                <th style="width:2rem;"><input type="checkbox" id="selAll"/></th>
+                <th>Login</th>
+                <th>Nome</th>
+                <th>Tipo</th>
+                <th>E-mail</th>
+                <th>Situação</th>
+                <th>NoUser</th>
+                <th>Empresa</th>
+                <th>Filial</th>
+                <th style="width:10rem;"></th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</section>
+@section Scripts { <script src="~/js/seg/usuarios-index.js"></script> }
