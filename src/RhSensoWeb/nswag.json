@@ -1,0 +1,42 @@
+﻿{
+  "$schema": "https://raw.githubusercontent.com/RicoSuter/NSwag/master/src/NSwag.Commands/Commands/nswag.schema.json",
+  "runtime": "Net90",
+  "documentGenerator": {
+    "fromDocument": {
+      "json": null,
+      "url": null,
+      "documentPath": "swagger.v1.json",
+      "output": null
+    }
+  },
+  "codeGenerators": {
+    "openApiToCSharpClient": {
+      "className": "{controller}Client",
+      "namespace": "RhSenso.ApiClient",
+      "operationGenerationMode": "MultipleClientsFromPathSegments",
+
+      "generateClientClasses": true,
+      "generateClientInterfaces": true,
+      "generateDtoTypes": true,
+      "generateOptionalParameters": true,
+      "generateResponseClasses": false,
+      "wrapResponses": false,
+
+      "useBaseUrl": false,
+      "disposeHttpClient": false,
+      "httpClientType": "System.Net.Http.HttpClient",
+      "useCancellationToken": true,
+
+      "jsonLibrary": "SystemTextJson",
+      "dateTimeType": "System.DateTimeOffset",
+      "arrayType": "System.Collections.Generic.List",
+      "dictionaryType": "System.Collections.Generic.Dictionary",
+      "generateDefaultValues": true,
+      "generateNullableReferenceTypes": true,
+      "clientClassAccessModifier": "public",
+      "generatePrepareRequestAndProcessResponseMethods": true,
+
+      "output": "Clients/RhSensoApi.Clients.g.cs"
+    }
+  }
+}

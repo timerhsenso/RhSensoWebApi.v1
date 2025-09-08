@@ -1,9 +1,9 @@
-﻿using System.Net.Http.Headers;
+using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using RhSensoWeb.Services.ApiClients;
+using Microsoft.Extensions.Logging;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,16 +18,16 @@ builder.Services.AddSession(o =>
     o.Cookie.IsEssential = true;
 });
 
-// API base URL (appsettings/user-secrets)
+// API base URL (appsettings)
 var apiBaseUrl = builder.Configuration["Api:BaseUrl"]
-    ?? throw new InvalidOperationException("Configure 'Api:BaseUrl' na APP.");
+    ?? throw new InvalidOperationException("Configure 'Api:BaseUrl' em appsettings.*");
 if (!apiBaseUrl.EndsWith("/")) apiBaseUrl += "/";
 
-// Handler que adiciona Authorization: Bearer {token}
+// Handler que adiciona Authorization: Bearer {token} quando existir
 builder.Services.AddTransient<AuthTokenHandler>();
 
-// Cliente tipado para a API — **registra IBotoesApi -> BotoesApi**
-builder.Services.AddHttpClient<IBotoesApi, BotoesApi>(client =>
+// HttpClient nomeado para a API
+builder.Services.AddHttpClient("Api", client =>
 {
     client.BaseAddress = new Uri(apiBaseUrl);
     client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
@@ -39,12 +39,6 @@ builder.Logging.AddConsole();
 
 var app = builder.Build();
 
-// Verificação em tempo de inicialização (log útil)
-using (var scope = app.Services.CreateScope())
-{
-    var ok = scope.ServiceProvider.GetService<IBotoesApi>() is not null;
-    app.Logger.LogInformation("IBotoesApi registrado? {Ok}", ok);
-}
 app.Logger.LogInformation("➡ API Base URL: {Url}", apiBaseUrl);
 
 if (!app.Environment.IsDevelopment())
@@ -57,7 +51,6 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 app.UseRouting();
 app.UseSession();
-// app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllerRoute(
@@ -70,7 +63,7 @@ app.MapControllerRoute(
 
 app.Run();
 
-// Handler para anexar o Bearer Token
+// Handler interno para anexar o Bearer Token (cookie ou sessão)
 internal sealed class AuthTokenHandler : DelegatingHandler
 {
     private readonly IHttpContextAccessor _http;
@@ -82,6 +75,7 @@ internal sealed class AuthTokenHandler : DelegatingHandler
         var token = ctx?.Request.Cookies["AuthToken"] ?? ctx?.Session.GetString("AuthToken");
         if (!string.IsNullOrWhiteSpace(token))
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
         return base.SendAsync(request, ct);
     }
 }

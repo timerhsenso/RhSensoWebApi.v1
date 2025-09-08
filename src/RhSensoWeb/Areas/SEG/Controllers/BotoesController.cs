@@ -1,200 +1,176 @@
-using System;
-using System.Threading.Tasks;
+using System.Text;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.Extensions.Configuration;
-using RhSenso.Shared.SEG.Botoes;
-using RhSensoWeb.Services.ApiClients;
+using Microsoft.Extensions.Logging;
+using RhSensoWeb.Common.DataTables;
 
 namespace RhSensoWeb.Areas.SEG.Controllers
 {
-    /// <summary>
-    /// Controller MVC da APP para Bot√µes (consome a API via IBotoesApi).
-    /// </summary>
     [Area("SEG")]
-    [Route("SEG/Botoes")]
-    public class BotoesController : Controller
+    public sealed class BotoesController : Controller
     {
-        private readonly IBotoesApi _api;
-        private readonly string _apiBaseUrl;
+        private readonly IHttpClientFactory _httpClientFactory;
+        private readonly ILogger<BotoesController> _logger;
 
-        /// <param name="api">Cliente HTTP tipado para a API.</param>
-        /// <param name="cfg">Usado aqui somente para exibir a URL da API na tela.</param>
-        public BotoesController(IBotoesApi api, IConfiguration cfg)
+        public BotoesController(IHttpClientFactory httpClientFactory, ILogger<BotoesController> logger)
         {
-            _api = api;
-            _apiBaseUrl = cfg["Api:BaseUrl"] ?? "(Api:BaseUrl n√£o configurado)";
+            _httpClientFactory = httpClientFactory;
+            _logger = logger;
         }
 
-        /// <summary>
-        /// P√°gina inicial da listagem (a tabela √© carregada por AJAX via a√ß√£o List).
-        /// </summary>
-        [HttpGet("")]
-        public IActionResult Index()
-        {
-            // Exibe a URL da API no topo da tela (inclua na View algo como:
-            // API: <span class="badge bg-secondary">@ViewBag.ApiBaseUrl</span>)
-            ViewBag.ApiBaseUrl = _apiBaseUrl;
-            return View();
-        }
+        [HttpGet]
+        public IActionResult Index() => View();
 
         /// <summary>
-        /// Endpoint usado pelo DataTables (server-side).
+        /// Endpoint consumido pelo DataTables.
+        /// LÍ os par‚metros do DataTables diretamente de Request.Query (evita conflito com propriedades/mÈtodos)
+        /// e chama a API /api/v1/botoes enviando asc como "true"/"false" (o ModelBinder da API n„o aceita "1").
         /// </summary>
-        [HttpGet("list")]
-        public async Task<IActionResult> List(
-            string? sistema,
-            string? funcao,
-            int draw = 1,
-            int start = 0,
-            int length = 10,
-            string? search = null,
-            string? orderColumn = "CodigoSistema",
-            string? orderDir = "asc")
+        [HttpGet]
+        public async Task<IActionResult> GetData(
+            [FromQuery] DataTablesRequest req,
+            [FromQuery] string? codigoSistema,
+            [FromQuery] string? codigoFuncao,
+            CancellationToken ct)
         {
-            // DataTables ‚Üí p√°gina 1-based
-            length = Math.Max(1, length);
-            start = Math.Max(0, start);
-            int page = (start / length) + 1;
-            bool asc = string.Equals(orderDir, "asc", StringComparison.OrdinalIgnoreCase);
-
-            // Normaliza o nome da coluna para o contrato esperado pela API
-            string orderBy = NormalizeOrderColumn(orderColumn);
-
-            try
+            // Se a API exige filtros, sem eles devolvemos vazio (n„o quebra a grid)
+            if (string.IsNullOrWhiteSpace(codigoSistema) || string.IsNullOrWhiteSpace(codigoFuncao))
             {
-                // OBS: a assinatura √© (data, total)
-                var (data, total) = await _api.ListAsync(
-                    sistema, funcao, search, page, length, orderBy, asc);
-
                 return Json(new
                 {
-                    draw,
-                    recordsTotal = total,
-                    recordsFiltered = total,
-                    data
-                });
-            }
-            catch (HttpRequestException ex)
-            {
-                // Em caso de erro da API, devolve payload que o DataTables entende
-                Response.StatusCode = 500;
-                return Json(new
-                {
-                    draw,
+                    draw = req.Draw,
                     recordsTotal = 0,
                     recordsFiltered = 0,
-                    error = ex.Message,
                     data = Array.Empty<object>()
                 });
             }
-        }
 
-        /// <summary>Abre o form vazio.</summary>
-        [HttpGet("create")]
-        public IActionResult Create()
-        {
-            ViewBag.ApiBaseUrl = _apiBaseUrl;
-            return View("Form", new BotaoFormDto());
-        }
+            // PaginaÁ„o
+            var pageSize = req.Length <= 0 ? 10 : req.Length;
+            var page = (req.Start / pageSize) + 1;
 
-        /// <summary>Abre o form preenchido.</summary>
-        [HttpGet("edit/{sistema}/{funcao}/{nome}")]
-        public async Task<IActionResult> Edit(string sistema, string funcao, string nome)
-        {
-            var dto = await _api.GetAsync(sistema, funcao, nome);
-            if (dto is null) return NotFound();
+            // OrdenaÁ„o: ler direto do query do DataTables
+            // order[0][dir] = asc|desc
+            var dir = (Request.Query["order[0][dir]"].ToString() ?? "").Trim().ToLowerInvariant();
+            var asc = dir != "desc"; // default asc
 
-            ViewBag.ApiBaseUrl = _apiBaseUrl;
-            return View("Form", dto);
-        }
-
-        /// <summary>Cria um novo registro.</summary>
-        [HttpPost("create")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([FromForm] BotaoFormDto dto)
-        {
-            if (!ModelState.IsValid)
+            // order[0][column] e columns[i][data] => tentar descobrir o campo (fallback = "nome")
+            string orderBy = "nome";
+            var colIndexStr = Request.Query["order[0][column]"].ToString();
+            if (int.TryParse(colIndexStr, out var colIndex))
             {
-                ViewBag.ApiBaseUrl = _apiBaseUrl;
-                return View("Form", dto);
+                var key = $"columns[{colIndex}][data]";
+                var columnData = Request.Query[key].ToString();
+                if (!string.IsNullOrWhiteSpace(columnData))
+                    orderBy = columnData;
             }
+
+            // A API quer "true"/"false" (texto) e n„o "1"/"0"
+            var ascText = asc ? "true" : "false";
+
+            // Query da API
+            var qb = new StringBuilder();
+            qb.Append($"/api/v1/botoes?page={page}");
+            qb.Append($"&pageSize={pageSize}");
+            qb.Append($"&orderBy={Uri.EscapeDataString(orderBy)}");
+            qb.Append($"&asc={ascText}");
+            qb.Append($"&codigoSistema={Uri.EscapeDataString(codigoSistema)}");
+            qb.Append($"&codigoFuncao={Uri.EscapeDataString(codigoFuncao)}");
+
+            var path = qb.ToString();
 
             try
             {
-                await _api.CreateAsync(dto);
-                TempData["Success"] = "Registro criado com sucesso.";
-                return RedirectToAction(nameof(Edit),
-                    new { sistema = dto.CodigoSistema, funcao = dto.CodigoFuncao, nome = dto.Nome });
-            }
-            catch (HttpRequestException ex)
-            {
-                ModelState.AddModelError(string.Empty, ex.Message);
-                ViewBag.ApiBaseUrl = _apiBaseUrl;
-                return View("Form", dto);
-            }
-        }
+                var http = _httpClientFactory.CreateClient("Api"); // configurado no Program.cs
+                using var resp = await http.GetAsync(path, ct);
+                var body = await resp.Content.ReadAsStringAsync(ct);
 
-        /// <summary>Atualiza um registro existente.</summary>
-        [HttpPost("edit/{sistema}/{funcao}/{nome}")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(string sistema, string funcao, string nome, [FromForm] BotaoFormDto dto)
-        {
-            if (!ModelState.IsValid)
-            {
-                ViewBag.ApiBaseUrl = _apiBaseUrl;
-                return View("Form", dto);
+                if (!resp.IsSuccessStatusCode)
+                {
+                    _logger.LogError("Falha ao consultar API em {Path}. Status: {Status}. Body: {Body}", path, (int)resp.StatusCode, body);
+                    return Json(new
+                    {
+                        draw = req.Draw,
+                        recordsTotal = 0,
+                        recordsFiltered = 0,
+                        data = Array.Empty<object>()
+                    });
+                }
+
+                // Aceitar dois formatos:
+                // 1) { total: number, data: [...] }
+                // 2) { success: true, data: { total: number, data: [...] }, ... }
+                using var doc = JsonDocument.Parse(body);
+                var root = doc.RootElement;
+
+                int total = 0;
+                JsonElement dataNode;
+
+                // Formato 2 (envelope)
+                if (root.TryGetProperty("data", out var envelope)
+                    && envelope.ValueKind == JsonValueKind.Object
+                    && envelope.TryGetProperty("total", out var totalInEnvelope)
+                    && envelope.TryGetProperty("data", out var dataInEnvelope)
+                    && dataInEnvelope.ValueKind == JsonValueKind.Array)
+                {
+                    total = totalInEnvelope.ValueKind == JsonValueKind.Number ? totalInEnvelope.GetInt32() : 0;
+                    dataNode = dataInEnvelope;
+                }
+                // Formato 1 (flat)
+                else if (root.TryGetProperty("total", out var totalFlat)
+                         && root.TryGetProperty("data", out var dataFlat)
+                         && dataFlat.ValueKind == JsonValueKind.Array)
+                {
+                    total = totalFlat.ValueKind == JsonValueKind.Number ? totalFlat.GetInt32() : 0;
+                    dataNode = dataFlat;
+                }
+                else
+                {
+                    _logger.LogWarning("Formato inesperado no retorno de {Path}: {Body}", path, body);
+                    return Json(new
+                    {
+                        draw = req.Draw,
+                        recordsTotal = 0,
+                        recordsFiltered = 0,
+                        data = Array.Empty<object>()
+                    });
+                }
+
+                var rows = JsonSerializer.Deserialize<List<Dictionary<string, object?>>>
+                (
+                    dataNode.GetRawText(),
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
+                ) ?? new List<Dictionary<string, object?>>();
+
+                return Json(new
+                {
+                    draw = req.Draw,
+                    recordsTotal = total,
+                    recordsFiltered = total,
+                    data = rows
+                });
             }
-
-            try
+            catch (OperationCanceledException)
             {
-                await _api.UpdateAsync(sistema, funcao, nome, dto);
-                TempData["Success"] = "Registro atualizado com sucesso.";
-                return RedirectToAction(nameof(Edit), new { sistema, funcao, nome });
+                return Json(new
+                {
+                    draw = req.Draw,
+                    recordsTotal = 0,
+                    recordsFiltered = 0,
+                    data = Array.Empty<object>()
+                });
             }
-            catch (HttpRequestException ex)
+            catch (Exception ex)
             {
-                ModelState.AddModelError(string.Empty, ex.Message);
-                ViewBag.ApiBaseUrl = _apiBaseUrl;
-                return View("Form", dto);
+                _logger.LogError(ex, "Erro ao consultar {Path}", path);
+                return Json(new
+                {
+                    draw = req.Draw,
+                    recordsTotal = 0,
+                    recordsFiltered = 0,
+                    data = Array.Empty<object>()
+                });
             }
-        }
-
-        /// <summary>Exclui um registro.</summary>
-        [HttpPost("delete/{sistema}/{funcao}/{nome}")]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Delete(string sistema, string funcao, string nome)
-        {
-            try
-            {
-                await _api.DeleteAsync(sistema, funcao, nome);
-                TempData["Success"] = "Registro exclu√≠do com sucesso.";
-            }
-            catch (HttpRequestException ex)
-            {
-                TempData["Error"] = ex.Message;
-            }
-
-            return RedirectToAction(nameof(Index));
-        }
-
-        // ----------------- helpers -----------------
-
-        /// <summary>
-        /// Converte nomes de colunas vindas do DataTables para os nomes que a API entende.
-        /// </summary>
-        private static string NormalizeOrderColumn(string? column)
-        {
-            if (string.IsNullOrWhiteSpace(column)) return "codigosistema";
-
-            return column.Trim().ToLowerInvariant() switch
-            {
-                "codigosistema" or "codigo sistema" or "cdsistema" => "codigosistema",
-                "codigofuncao" or "codigo funcao" or "cdfuncao" => "codigofuncao",
-                "nome" => "nome",
-                "descricao" or "descri√ß√£o" => "descricao",
-                "acao" or "a√ß√£o" => "acao",
-                _ => "codigosistema"
-            };
         }
     }
 }
