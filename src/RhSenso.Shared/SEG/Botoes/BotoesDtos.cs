@@ -1,41 +1,32 @@
-﻿// src/RhSenso.Shared/SEG/Botoes/BotoesDtos.cs
-using System.ComponentModel.DataAnnotations;
+﻿using RhSenso.Shared.Security;
 
 namespace RhSenso.Shared.SEG.Botoes
 {
-    /// <summary>Chave composta do botão (Sistema/Função/Nome).</summary>
-    public sealed record BotaoKeyDto(
-        string CodigoSistema,
-        string CodigoFuncao,
-        string Nome
-    );
+    public sealed record BotaoKeyDto(string CodigoSistema, string CodigoFuncao, string Nome);
 
-    /// <summary>DTO enxuto para listagem.</summary>
+    /// <summary>
+    /// DTO para listagem (grid). Agora expõe "Id" seguro (Base64Url da chave composta).
+    /// </summary>
     public sealed record BotaoListDto(
         string CodigoSistema,
         string CodigoFuncao,
         string Nome,
         string Descricao,
-        string Acao
-    );
+        string Acao)
+    {
+        public string KeyRaw => $"{CodigoSistema}|{CodigoFuncao}|{Nome}";
+        public string Id => KeyCodec.ToBase64Url(KeyRaw);
+    }
 
-    /// <summary>DTO para criação/edição (validado na App e na API).</summary>
+    /// <summary>
+    /// DTO para criar/editar botão.
+    /// </summary>
     public sealed class BotaoFormDto
     {
-        [Required, StringLength(10, MinimumLength = 1)]
         public string CodigoSistema { get; set; } = string.Empty;
-
-        [Required, StringLength(30, MinimumLength = 1)]
         public string CodigoFuncao { get; set; } = string.Empty;
-
-        [Required, StringLength(30, MinimumLength = 1)]
         public string Nome { get; set; } = string.Empty;
-
-        [Required, StringLength(60, MinimumLength = 1)]
         public string Descricao { get; set; } = string.Empty;
-
-        // cdacao é char(1) → force 1 caractere
-        [Required, StringLength(1, MinimumLength = 1)]
-        public string Acao { get; set; } = "I"; // valor default opcional
+        public string Acao { get; set; } = string.Empty;
     }
 }

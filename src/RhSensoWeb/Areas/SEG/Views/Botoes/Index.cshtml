@@ -44,54 +44,66 @@
 
     <script>
         (function () {
-            const $sistema = $("#filtroSistema");
-            const $funcao  = $("#filtroFuncao");
+          const $t = $('#tabela');
 
-            const table = $("#tabela").DataTable({
-                serverSide: true,
-                processing: true,
-                searching: false,
-                lengthChange: true,
-                pageLength: 10,
-                ajax: {
-                    url: "@Url.Action("GetData", "Botoes", new { area = "SEG" })",
-                    data: function (d) {
-                        // Envia filtros para o controller (que repassa para a API)
-                        d.codigoSistema = $sistema.val();
-                        d.codigoFuncao  = $funcao.val();
-                    }
-                },
-                columns: [
-                    { data: "id", className: "text-nowrap" },
-                    { data: "codigoSistema", className: "text-nowrap" },
-                    { data: "codigoFuncao", className: "text-nowrap" },
-                    { data: "nome" },
-                    { data: "descricao" },
-                    {
-                        data: null, orderable: false, className: "text-nowrap",
-                        render: function (row) {
-                            return `
-                                <div class="btn-group btn-group-sm">
-                                  <a class="btn btn-outline-primary" href="#">Editar</a>
-                                  <button class="btn btn-outline-danger" type="button">Excluir</button>
-                                </div>`;
-                        }
-                    }
-                ],
-                language: {
-                    url: "https://cdn.datatables.net/plug-ins/2.0.8/i18n/pt-BR.json"
+          if ($.fn.DataTable.isDataTable($t)) {
+            $t.DataTable().destroy();
+          }
+
+          $t.DataTable({
+            processing: true,
+            serverSide: true,
+            ajax: {
+              // Se você usa endpoint do MVC (proxy), mantenha sua rota atual:
+              url: '/seg/botoes/GetData',
+              type: 'GET',
+              // Suporta tanto { data: [...] } quanto array direto:
+              dataSrc: function (json) { return json?.data ?? json; }
+            },
+            columns: [
+              { data: "id", visible: false },            // agora SEM ERRO: id existe (Base64Url)
+              { data: "codigoSistema", title: "Sistema" },
+              { data: "codigoFuncao",  title: "Função"  },
+              { data: "nome",          title: "Botão"   },
+              { data: "descricao",     title: "Descrição" },
+              { data: "acao",          title: "Ação" },
+              {
+                title: "Operações",
+                orderable: false,
+                searchable: false,
+                render: function (_, __, row) {
+                  const key = encodeURIComponent(row.id); // Id seguro Base64Url
+                  return `
+                    <div class="btn-group btn-group-sm" role="group">
+                      <a class="btn btn-outline-primary" href="/seg/botoes/editar?key=${key}">Editar</a>
+                      <button class="btn btn-outline-danger" data-key="${key}" onclick="excluirBotao(this)">Excluir</button>
+                    </div>`;
                 }
-            });
-
-            // Recarrega quando mudar filtros (e só busca quando ambos preenchidos)
-            function tryReload() {
-                const sOk = $sistema.val()?.trim().length > 0;
-                const fOk = $funcao.val()?.trim().length > 0;
-                if (sOk && fOk) table.ajax.reload();
-            }
-
-            $sistema.on("change keyup", tryReload);
-            $funcao.on("change keyup", tryReload);
+              }
+            ],
+            order: [[1, 'asc'], [2, 'asc'], [3, 'asc']],
+            searchDelay: 400 // debounce simples
+          });
         })();
+
+        async function excluirBotao(btn){
+          const key = btn.getAttribute('data-key');
+          if(!confirm('Confirmar exclusão?')) return;
+          try{
+            const resp = await fetch('/seg/botoes/delete', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'RequestVerificationToken': $('input[name="__RequestVerificationToken"]').val()
+              },
+              body: JSON.stringify({ key }) // você decodifica no server (Base64Url → "SEG|...|NOME")
+            });
+            if(!resp.ok){ throw new Error('Falha ao excluir'); }
+            $('#tabela').DataTable().ajax.reload(null, false);
+          }catch(e){
+            alert(e.message);
+          }
+        }
     </script>
+
 }

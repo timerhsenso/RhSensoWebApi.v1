@@ -12,62 +12,38 @@
 //    - Fail-fast em produção: sem ConnectionString/Key/AllowedOrigins => não sobe.
 //    - Padronização: ConnectionStrings:Default.
 //    - Health checks (com readiness mapeado) e raiz amigável.
-//
-//  📦 Como configurar (DEV):
-//    dotnet user-secrets init
-//    dotnet user-secrets set "ConnectionStrings:Default" "Server=...;Database=...;User Id=...;Password=...;TrustServerCertificate=true"
-//    dotnet user-secrets set "JWT:Key" "<chave-aleatoria-256bits>"
-//    // Opcional: cors para DEV
-//    dotnet user-secrets set "Cors:AllowedOrigins:0" "https://localhost:5173"
-//    dotnet user-secrets set "Cors:AllowedOrigins:1" "http://localhost:5173"
-//
-//  🏭 Como configurar (PROD) via variáveis de ambiente (exemplos):
-//    ConnectionStrings__Default="Server=...;Database=...;User Id=...;Password=...;TrustServerCertificate=true"
-//    JWT__Key="<chave-256bits-prod>"
-//    Cors__AllowedOrigins="https://app.seu-dominio.com;https://admin.seu-dominio.com"
-//  (A lista de origens pode vir como array na configuração ou string única separada por ';').
+//    - JSON camelCase + resposta 400 de validação padronizada.
 // --------------------------------------------------------------------------------------
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
-using Microsoft.AspNetCore.Mvc;                    // InvalidModelStateResponseFactory
+using Microsoft.AspNetCore.Mvc;                    // ApiBehaviorOptions
+using Microsoft.AspNetCore.Mvc.Versioning;         // AddApiVersioning / UrlSegmentApiVersionReader
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Logging;               // LogLevel.Information
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 using RhSensoWebApi.API.Middleware;               // Middlewares próprios
 using RhSensoWebApi.API.Swagger;                  // Swagger SchemaFilters
+using RhSensoWebApi.Core.Abstractions.SEG.Botoes;
+using RhSensoWebApi.Core.Abstractions.SEG.Sistemas;
+using RhSensoWebApi.Core.Abstractions.SEG.Usuarios;
 using RhSensoWebApi.Core.Common.Exceptions;       // BaseResponse, ErrorDto
 using RhSensoWebApi.Core.Interfaces;
 using RhSensoWebApi.Core.Services;
+using RhSensoWebApi.Infrastructure;
 using RhSensoWebApi.Infrastructure.Cache;
 using RhSensoWebApi.Infrastructure.Data.Context;
 using RhSensoWebApi.Infrastructure.Data.Repositories;
 using RhSensoWebApi.Infrastructure.Services;
+using RhSensoWebApi.Infrastructure.Services.SEG.Botoes;
+using RhSensoWebApi.Infrastructure.Services.SEG.Sistemas;
+using RhSensoWebApi.Infrastructure.Services.SEG.Usuarios;
 using Serilog;
 using Serilog.Events;
-using System.Linq;                                 // Where/ToDictionary
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using RhSensoWebApi.Core.Abstractions.SEG.Botoes;
-using RhSensoWebApi.Infrastructure;
-using Microsoft.EntityFrameworkCore;
-using RhSensoWebApi.Infrastructure.Data.Context;
-
-using RhSensoWebApi.Core.Abstractions.SEG.Botoes;
-using RhSensoWebApi.Infrastructure.Services.SEG.Botoes;
-
-using RhSensoWebApi.Core.Abstractions.SEG.Sistemas;
-using RhSensoWebApi.Infrastructure.Services.SEG.Sistemas;
-using RhSensoWebApi.Core.Entities.SEG;
-using RhSensoWebApi.Core.Abstractions.SEG.Usuarios;
-using RhSensoWebApi.Infrastructure.Services.SEG.Usuarios;
-
-
-
-
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -104,6 +80,28 @@ builder.Services.AddControllers(options =>
 });
 
 // -------------------------
+// API Versioning  ✅ NÃO registrar ConstraintMap manualmente
+// -------------------------
+builder.Services.AddApiVersioning(o =>
+{
+    o.DefaultApiVersion = new ApiVersion(1, 0);          // v1.0 padrão
+    o.AssumeDefaultVersionWhenUnspecified = true;        // usa v1 quando não informado
+    o.ReportApiVersions = true;                          // expõe versões nos headers
+    o.ApiVersionReader = new UrlSegmentApiVersionReader(); // lê do caminho (/v1/)
+});
+// Exploração por versão (Swagger usa isso para agrupar docs por vX)
+builder.Services.AddVersionedApiExplorer(o =>
+{
+    o.GroupNameFormat = "'v'VVV";           // v1, v1.1...
+    o.SubstituteApiVersionInUrl = true;     // substitui {version} na rota
+});
+
+// -------------------------
+// (Opcional) ProblemDetails (RFC7807)
+// -------------------------
+builder.Services.AddProblemDetails();
+
+// -------------------------
 // 400 de validação padronizado (errors por campo + traceId)
 // -------------------------
 builder.Services.Configure<ApiBehaviorOptions>(options =>
@@ -133,7 +131,6 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 
 // -------------------------
 // Database (EF Core / SQL Server)
-// - ConnectionStrings:Default deve vir de User Secrets (DEV) ou VARs/KeyVault (PROD)
 // -------------------------
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
@@ -173,8 +170,6 @@ else
 
 // -------------------------
 // JWT Authentication
-// - Em PROD, RequireHttpsMetadata = true
-// - Chave deve vir de User Secrets/VARs (não versionar)
 // -------------------------
 var jwtSettings = builder.Configuration.GetSection("JWT");
 var jwtKey = builder.Configuration["JWT:Key"]; // validado depois no fail-fast
@@ -185,12 +180,11 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         options.RequireHttpsMetadata = !builder.Environment.IsDevelopment();
         options.SaveToken = true;
 
-        // Validação de token
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = string.IsNullOrWhiteSpace(jwtKey)
-                ? new SymmetricSecurityKey(Encoding.UTF8.GetBytes("placeholder-key")) // nunca será usada se falharmos cedo
+                ? new SymmetricSecurityKey(Encoding.UTF8.GetBytes("placeholder-key")) // não usada se falharmos cedo
                 : new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
             ValidateIssuer = true,
             ValidIssuer = jwtSettings["Issuer"],
@@ -247,8 +241,6 @@ builder.Services.AddSwaggerGen(c =>
 
 // -------------------------
 // CORS — Política nomeada "Frontends"
-// - Em DEV: usa AllowedOrigins ou fallback para localhost
-// - Em PROD: exige AllowedOrigins (falha se não houver)
 // -------------------------
 string[] allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
 
@@ -268,7 +260,7 @@ builder.Services.AddCors(options =>
         {
             var devFallback = new[]
             {
-                "https://localhost:7050", "http://localhost:5189", // fronts MVC
+                "https://localhost:7050", "http://localhost:5189",
                 "https://localhost:5173", "http://localhost:5173",
                 "https://localhost:5174", "http://localhost:5174"
             };
@@ -276,7 +268,8 @@ builder.Services.AddCors(options =>
 
             policy.WithOrigins(origins)
                   .AllowAnyHeader()
-                  .AllowAnyMethod();
+                  .AllowAnyMethod()
+                  .AllowCredentials();
         }
         else
         {
@@ -286,15 +279,14 @@ builder.Services.AddCors(options =>
 
             policy.WithOrigins(allowedOrigins)
                   .AllowAnyHeader()
-                  .AllowAnyMethod();
+                  .AllowAnyMethod()
+                  .AllowCredentials();
         }
     });
 });
 
 // -------------------------
 // Health Checks (liveness e readiness)
-//  OBS: sua versão do pacote não aceita 'timeout' por parâmetro aqui.
-//       Se precisar de timeout curto, use 'Connect Timeout=5' na connection string.
 // -------------------------
 builder.Services.AddHealthChecks()
     .AddCheck("self", () => HealthCheckResult.Healthy())  // liveness: /health
@@ -307,12 +299,10 @@ builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<ICacheService, CacheService>();
-// builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
 builder.Services.AddScoped<RhSensoWebApi.Core.Interfaces.IPasswordHasher, RhSensoWebApi.Infrastructure.Services.PasswordHasher>();
 
 builder.Services.AddScoped<IBotoesService, BotoesService>();
 builder.Services.AddScoped<ISistemasService, SistemasService>();
-
 builder.Services.AddScoped<IUsuariosService, UsuariosService>();
 
 // -------------------------
@@ -347,35 +337,26 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
-    // Em produção, página de erro genérica + HSTS
     app.UseExceptionHandler("/Error");
     app.UseHsts();
 }
 
-// HTTPS redirection
 app.UseHttpsRedirection();
 
-// [1] Logging de request/response
-app.UseMiddleware<RequestLoggingMiddleware>();
+app.UseMiddleware<RequestLoggingMiddleware>();     // [1] Logging de request/response
+app.UseMiddleware<ExceptionHandlingMiddleware>();  // [2] Tratamento global de exceções
 
-// [2] Tratamento global de exceções => padroniza falhas (BaseResponse)
-app.UseMiddleware<ExceptionHandlingMiddleware>();
-
-// CORS — usar SEMPRE a política nomeada
 app.UseCors("Frontends");
 
-// AuthN / AuthZ
 app.UseAuthentication();
 app.UseAuthorization();
 
 // Health Checks
-// /health  -> liveness (sem dependências) -> responde 200 em testes
 app.MapHealthChecks("/health", new HealthCheckOptions
 {
     Predicate = r => r.Name == "self"
 });
 
-// /health/ready -> readiness (depende de DB) -> pode responder 503 se DB falhar
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = _ => true,
@@ -387,7 +368,7 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
     }
 });
 
-// Rota raiz amigável (evita 404 em "/")
+// Rota raiz amigável
 if (app.Environment.IsDevelopment())
 {
     app.MapGet("/", () => Results.Redirect("/swagger"));
@@ -397,19 +378,8 @@ else
     app.MapGet("/", () => Results.Text("RhSenso API - OK", "text/plain"));
 }
 
-// Controllers
 app.MapControllers();
 
-// (Opcional) Migrations automáticas — use conscientemente
-/*
-using (var scope = app.Services.CreateScope())
-{
-    var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-    await context.Database.MigrateAsync();
-}
-*/
-
-// Log de start com resumo de CORS
 Serilog.Log.Information("Ambiente: {Env}. CORS habilitado para: {Origins}",
     app.Environment.EnvironmentName,
     string.Join(", ", allowedOrigins.Length > 0 ? allowedOrigins : new[] { "(DEV fallback localhost)" }));

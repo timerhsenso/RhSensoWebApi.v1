@@ -1,12 +1,12 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+<Project Sdk="Microsoft.NET.Sdk.Web">
   <PropertyGroup>
     <TargetFramework>net8.0</TargetFramework>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
-    <UserSecretsId>e8de54ac-7049-4b3e-9b1a-86a897ae86d7</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- Pacotes (sem Version: gestão central em Directory.Packages.props) -->
     <PackageReference Include="Serilog.AspNetCore" />
     <PackageReference Include="Serilog.Sinks.Console" />
     <PackageReference Include="Serilog.Sinks.File" />
@@ -25,15 +25,12 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.SqlServer" />
 
     <PackageReference Include="AutoMapper.Extensions.Microsoft.DependencyInjection" />
-    
-    <!-- ADICIONADO: FluentValidation para os validators -->
-    <PackageReference Include="FluentValidation" />
-    <PackageReference Include="FluentValidation.AspNetCore" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\RhSenso.Shared\RhSenso.Shared.csproj" />
-    <ProjectReference Include="..\Core\RhSensoWebApi.Core.csproj" />
-    <ProjectReference Include="..\Infrastructure\RhSensoWebApi.Infrastructure.csproj" />
+    <!-- REFERÊNCIAS DE PROJETO (não comente estas!) -->
+    <ProjectReference Include="..\..\RhSenso.Shared\RhSenso.Shared.csproj" />
+    <ProjectReference Include="..\..\Core\RhSensoWebApi.Core.csproj" />
+    <ProjectReference Include="..\..\Infrastructure\RhSensoWebApi.Infrastructure.csproj" />
   </ItemGroup>
 </Project>
