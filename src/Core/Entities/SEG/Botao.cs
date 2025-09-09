@@ -5,7 +5,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace RhSensoWebApi.Core.Entities.SEG
 {
     [Table("btfuncao", Schema = "dbo")]
-    public class Botao
+    public partial class Botao
     {
         [Key, Column("cdsistema", TypeName = "char(10)")]
         public string CodigoSistema { get; set; } = string.Empty;

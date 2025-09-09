@@ -18,4 +18,10 @@
     <ProjectReference Include="..\RhSenso.Shared\RhSenso.Shared.csproj" />
     <ProjectReference Include="..\Core\RhSensoWebApi.Core.csproj" />
   </ItemGroup>
+
+	<ItemGroup>
+		<FrameworkReference Include="Microsoft.AspNetCore.App" />
+	</ItemGroup>
+
+	
 </Project>
