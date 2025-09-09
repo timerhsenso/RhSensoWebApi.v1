@@ -35,6 +35,7 @@ namespace RhSensoWeb
             // Sessão + Cache + HttpContextAccessor
             // ===============================================================
             builder.Services.AddHttpContextAccessor();
+
             builder.Services.AddDistributedMemoryCache();
             builder.Services.AddSession(o =>
             {

@@ -5,14 +5,13 @@
 //
 //  ✅ Itens implementados:
 //    - CORS com política nomeada ("Frontends") e origens restritas por ambiente.
-//      * Em DEV: usa "Cors:AllowedOrigins" ou fallback para localhost.
-//      * Em PROD: exige "Cors:AllowedOrigins" (falha se não configurar).
 //    - HTTPS/HSTS em produção; RequireHttpsMetadata = true fora de DEV.
 //    - JWT configurado a partir de segredos.
 //    - Fail-fast em produção: sem ConnectionString/Key/AllowedOrigins => não sobe.
 //    - Padronização: ConnectionStrings:Default.
 //    - Health checks (com readiness mapeado) e raiz amigável.
 //    - JSON camelCase + resposta 400 de validação padronizada.
+//    - 🔹 Auditoria & Soft-Delete (Item 6): registra interceptor do EF e injeta no DbContext.
 // --------------------------------------------------------------------------------------
 
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -44,6 +43,8 @@ using Serilog.Events;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using FluentValidation;
+using FluentValidation.AspNetCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -79,30 +80,38 @@ builder.Services.AddControllers(options =>
     options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 
+// Validação automática pelo FluentValidation (sem DataAnnotations para evitar duplicidade)
+builder.Services.AddFluentValidationAutoValidation(opt =>
+{
+    opt.DisableDataAnnotationsValidation = true;
+});
+
+// Descobre e registra todos os validators deste assembly (inclui BotaoFormValidator)
+builder.Services.AddValidatorsFromAssemblyContaining<RhSensoWebApi.API.Validators.SEG.BotaoFormValidator>();
+
 // -------------------------
-// API Versioning  ✅ NÃO registrar ConstraintMap manualmente
+// API Versioning
 // -------------------------
 builder.Services.AddApiVersioning(o =>
 {
-    o.DefaultApiVersion = new ApiVersion(1, 0);          // v1.0 padrão
-    o.AssumeDefaultVersionWhenUnspecified = true;        // usa v1 quando não informado
-    o.ReportApiVersions = true;                          // expõe versões nos headers
-    o.ApiVersionReader = new UrlSegmentApiVersionReader(); // lê do caminho (/v1/)
+    o.DefaultApiVersion = new ApiVersion(1, 0);
+    o.AssumeDefaultVersionWhenUnspecified = true;
+    o.ReportApiVersions = true;
+    o.ApiVersionReader = new UrlSegmentApiVersionReader();
 });
-// Exploração por versão (Swagger usa isso para agrupar docs por vX)
 builder.Services.AddVersionedApiExplorer(o =>
 {
-    o.GroupNameFormat = "'v'VVV";           // v1, v1.1...
-    o.SubstituteApiVersionInUrl = true;     // substitui {version} na rota
+    o.GroupNameFormat = "'v'VVV";
+    o.SubstituteApiVersionInUrl = true;
 });
 
 // -------------------------
-// (Opcional) ProblemDetails (RFC7807)
+// ProblemDetails (RFC7807)
 // -------------------------
 builder.Services.AddProblemDetails();
 
 // -------------------------
-// 400 de validação padronizado (errors por campo + traceId)
+// 400 de validação padronizado
 // -------------------------
 builder.Services.Configure<ApiBehaviorOptions>(options =>
 {
@@ -122,7 +131,9 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
             Success = false,
             Message = "Falha de validação.",
             Errors = errors,
-            TraceId = context.HttpContext.TraceIdentifier
+            TraceId = context.HttpContext.TraceIdentifier,
+            Error = new ErrorDto { Code = "VALIDATION_ERROR", Message = "Falha de validação." },
+            Timestamp = DateTime.UtcNow
         };
 
         return new BadRequestObjectResult(resp);
@@ -130,11 +141,23 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
 });
 
 // -------------------------
+// 🔹 Item 6 — Auditoria & Soft-Delete (DI)
+//    - HttpContextAccessor: para identificar usuário no interceptor
+//    - Interceptor do EF: aplicado no AddDbContext (abaixo)
+// -------------------------
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<RhSensoWebApi.Infrastructure.Data.Interceptors.AuditSoftDeleteInterceptor>();
+
+// -------------------------
 // Database (EF Core / SQL Server)
 // -------------------------
-builder.Services.AddDbContext<AppDbContext>(options =>
+// ⚠️ Alterado para sobrecarga com 'sp' para injetar o interceptor.
+builder.Services.AddDbContext<AppDbContext>((sp, options) =>
 {
     options.UseSqlServer(builder.Configuration.GetConnectionString("Default"));
+
+    // Aplica o interceptor de auditoria/soft delete
+    options.AddInterceptors(sp.GetRequiredService<RhSensoWebApi.Infrastructure.Data.Interceptors.AuditSoftDeleteInterceptor>());
 
     // 1) Log de SQL (vai para console; Serilog captura)
     options.LogTo(Console.WriteLine, LogLevel.Information);
@@ -147,24 +170,20 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 });
 
 // -------------------------
-// Cache (Memória + Redis opcional, fallback em memória distribuída)
+// Cache (Memória + Redis opcional)
 // -------------------------
-builder.Services.AddMemoryCache(); // cache local L1 (IMemoryCache)
-
+builder.Services.AddMemoryCache();
 var redisConnection = builder.Configuration.GetConnectionString("Redis");
-
 if (!string.IsNullOrWhiteSpace(redisConnection))
 {
-    // Produção (ou quando Redis configurado)
     builder.Services.AddStackExchangeRedisCache(options =>
     {
         options.Configuration = redisConnection;
-        options.InstanceName = "rhsenso:"; // prefixo p/ evitar colisões
+        options.InstanceName = "rhsenso:";
     });
 }
 else
 {
-    // Dev ou quando não há Redis configurado
     builder.Services.AddDistributedMemoryCache();
 }
 
@@ -184,7 +203,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         {
             ValidateIssuerSigningKey = true,
             IssuerSigningKey = string.IsNullOrWhiteSpace(jwtKey)
-                ? new SymmetricSecurityKey(Encoding.UTF8.GetBytes("placeholder-key")) // não usada se falharmos cedo
+                ? new SymmetricSecurityKey(Encoding.UTF8.GetBytes("placeholder-key"))
                 : new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
             ValidateIssuer = true,
             ValidIssuer = jwtSettings["Issuer"],
@@ -196,7 +215,7 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 // -------------------------
-// Authorization (policies/claims podem ser adicionadas depois)
+// Authorization
 // -------------------------
 builder.Services.AddAuthorization();
 
@@ -213,7 +232,6 @@ builder.Services.AddSwaggerGen(c =>
         Description = "API de Autenticação e Autorização para Sistemas ERP"
     });
 
-    // JWT Bearer
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "JWT Authorization header usando o esquema Bearer. Ex.: \"Authorization: Bearer {token}\"",
@@ -234,7 +252,6 @@ builder.Services.AddSwaggerGen(c =>
         }
     });
 
-    // Exemplos — se você adicionou os SchemaFilters no projeto
     c.SchemaFilter<ErrorDtoSchemaExample>();
     c.SchemaFilter<BaseResponseSchemaExample>();
 });
@@ -243,13 +260,10 @@ builder.Services.AddSwaggerGen(c =>
 // CORS — Política nomeada "Frontends"
 // -------------------------
 string[] allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? Array.Empty<string>();
-
-// Fallback para var de ambiente única separada por ';'
 var allowedOriginsEnv = builder.Configuration["Cors:AllowedOrigins"];
 if (allowedOrigins.Length == 0 && !string.IsNullOrWhiteSpace(allowedOriginsEnv))
 {
-    allowedOrigins = allowedOriginsEnv
-        .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+    allowedOrigins = allowedOriginsEnv.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 }
 
 builder.Services.AddCors(options =>
@@ -266,10 +280,7 @@ builder.Services.AddCors(options =>
             };
             var origins = (allowedOrigins.Length > 0) ? allowedOrigins : devFallback;
 
-            policy.WithOrigins(origins)
-                  .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .AllowCredentials();
+            policy.WithOrigins(origins).AllowAnyHeader().AllowAnyMethod().AllowCredentials();
         }
         else
         {
@@ -277,20 +288,17 @@ builder.Services.AddCors(options =>
                 throw new InvalidOperationException(
                     "CORS: configure 'Cors:AllowedOrigins' para produção (ex.: https://app.seu-dominio.com;https://admin.seu-dominio.com)");
 
-            policy.WithOrigins(allowedOrigins)
-                  .AllowAnyHeader()
-                  .AllowAnyMethod()
-                  .AllowCredentials();
+            policy.WithOrigins(allowedOrigins).AllowAnyHeader().AllowAnyMethod().AllowCredentials();
         }
     });
 });
 
 // -------------------------
-// Health Checks (liveness e readiness)
+// Health Checks
 // -------------------------
 builder.Services.AddHealthChecks()
-    .AddCheck("self", () => HealthCheckResult.Healthy())  // liveness: /health
-    .AddDbContextCheck<AppDbContext>(name: "db");         // readiness: /health/ready
+    .AddCheck("self", () => HealthCheckResult.Healthy())
+    .AddDbContextCheck<AppDbContext>(name: "db");
 
 // -------------------------
 // Dependency Injection (Repos/Serviços)
@@ -300,13 +308,12 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<ICacheService, CacheService>();
 builder.Services.AddScoped<RhSensoWebApi.Core.Interfaces.IPasswordHasher, RhSensoWebApi.Infrastructure.Services.PasswordHasher>();
-
 builder.Services.AddScoped<IBotoesService, BotoesService>();
 builder.Services.AddScoped<ISistemasService, SistemasService>();
 builder.Services.AddScoped<IUsuariosService, UsuariosService>();
 
 // -------------------------
-// Fail-fast de produção (não sobe sem segredos mínimos)
+// Fail-fast de produção
 // -------------------------
 if (builder.Environment.IsProduction())
 {
@@ -321,15 +328,13 @@ if (builder.Environment.IsProduction())
 }
 
 // ============================================================================
-// BUILD — a partir daqui temos o 'app'
+// BUILD
 // ============================================================================
 var app = builder.Build();
 
 // ============================================================================
-// PIPELINE (middlewares) — tudo DEPOIS do Build()
+// PIPELINE
 // ============================================================================
-
-// Swagger — somente em DEV
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -337,14 +342,17 @@ if (app.Environment.IsDevelopment())
 }
 else
 {
-    app.UseExceptionHandler("/Error");
     app.UseHsts();
 }
 
 app.UseHttpsRedirection();
 
-app.UseMiddleware<RequestLoggingMiddleware>();     // [1] Logging de request/response
-app.UseMiddleware<ExceptionHandlingMiddleware>();  // [2] Tratamento global de exceções
+// CorrelationId deve vir antes dos logs/exceções para enriquecer tudo que vier depois
+app.UseMiddleware<RhSensoWebApi.API.Middleware.CorrelationIdMiddleware>();
+
+app.UseMiddleware<RequestLoggingMiddleware>();     // [1] Logging já com CorrelationId no contexto
+app.UseMiddleware<ExceptionHandlingMiddleware>();  // [2] ProblemDetails/BaseResponse com TraceIdentifier alinhado
+
 
 app.UseCors("Frontends");
 
@@ -352,11 +360,7 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 // Health Checks
-app.MapHealthChecks("/health", new HealthCheckOptions
-{
-    Predicate = r => r.Name == "self"
-});
-
+app.MapHealthChecks("/health", new HealthCheckOptions { Predicate = r => r.Name == "self" });
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = _ => true,
@@ -370,13 +374,9 @@ app.MapHealthChecks("/health/ready", new HealthCheckOptions
 
 // Rota raiz amigável
 if (app.Environment.IsDevelopment())
-{
     app.MapGet("/", () => Results.Redirect("/swagger"));
-}
 else
-{
     app.MapGet("/", () => Results.Text("RhSenso API - OK", "text/plain"));
-}
 
 app.MapControllers();
 
