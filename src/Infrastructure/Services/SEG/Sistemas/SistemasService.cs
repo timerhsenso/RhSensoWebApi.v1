@@ -13,15 +13,15 @@ namespace RhSensoWebApi.Infrastructure.Services.SEG.Sistemas
 
         public async Task<List<SistemaListDto>> GetAllAsync(CancellationToken ct = default)
             => await _db.Sistemas.AsNoTracking()
-                .OrderBy(s => s.Descricao)
-                .Select(s => new SistemaListDto(s.CdSistema, s.Descricao))
+                .OrderBy(s => s.DcSistema)
+                .Select(s => new SistemaListDto(s.CdSistema, s.DcSistema))
                 .ToListAsync(ct);
 
         public async Task<SistemaListDto?> GetByIdAsync(string codigo, CancellationToken ct = default)
         {
             var s = await _db.Sistemas.AsNoTracking()
                 .FirstOrDefaultAsync(x => x.CdSistema == codigo, ct);
-            return s is null ? null : new SistemaListDto(s.CdSistema, s.Descricao);
+            return s is null ? null : new SistemaListDto(s.CdSistema, s.DcSistema);
         }
 
         public async Task CreateAsync(SistemaCreateDto dto, CancellationToken ct = default)
@@ -37,7 +37,7 @@ namespace RhSensoWebApi.Infrastructure.Services.SEG.Sistemas
             _db.Sistemas.Add(new Sistema
             {
                 CdSistema = dto.Codigo.Trim(),
-                Descricao = dto.Descricao.Trim(),
+                DcSistema = dto.Descricao.Trim(),
                 Ativo = true
             });
             await _db.SaveChangesAsync(ct);
@@ -51,7 +51,7 @@ namespace RhSensoWebApi.Infrastructure.Services.SEG.Sistemas
             if (string.IsNullOrWhiteSpace(dto.Descricao) || dto.Descricao.Length > 60)
                 throw new ArgumentException("Descrição inválida (até 60 chars).");
 
-            s.Descricao = dto.Descricao.Trim();
+            s.DcSistema = dto.Descricao.Trim();
             await _db.SaveChangesAsync(ct);
         }
 

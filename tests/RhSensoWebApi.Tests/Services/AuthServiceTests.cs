@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using RhSensoWebApi.Core.DTOs;
 using RhSensoWebApi.Core.Entities;
+using RhSensoWebApi.Core.Entities.SEG;
 using RhSensoWebApi.Core.Interfaces;
 using RhSensoWebApi.Core.Services;
 
@@ -8,7 +9,7 @@ namespace RhSensoWebApi.Tests.Services;
 
 public class AuthServiceTests
 {
-    private readonly Mock<IUserRepository> _userRepositoryMock;
+    private readonly Mock<IUsuarioRepository> _userRepositoryMock;
     private readonly Mock<ITokenService> _tokenServiceMock;
     private readonly Mock<ICacheService> _cacheServiceMock;
     private readonly Mock<IPasswordHasher> _passwordHasherMock;
@@ -17,7 +18,7 @@ public class AuthServiceTests
 
     public AuthServiceTests()
     {
-        _userRepositoryMock = new Mock<IUserRepository>();
+        _userRepositoryMock = new Mock<IUsuarioRepository>();
         _tokenServiceMock = new Mock<ITokenService>();
         _cacheServiceMock = new Mock<ICacheService>();
         _passwordHasherMock = new Mock<IPasswordHasher>();
@@ -93,7 +94,7 @@ public class AuthServiceTests
     {
         // Arrange
         var request = new LoginRequest { CdUsuario = "testuser", Senha = "password" };
-        var user = new User
+        var user = new Usuario
         {
             CdUsuario = "testuser",
             FlAtivo = true,

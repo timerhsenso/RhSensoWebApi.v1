@@ -1,28 +1,48 @@
+using Microsoft.Extensions.Logging;
 using RhSensoWebApi.Core.Interfaces;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace RhSensoWebApi.Infrastructure.Services
 {
-    /// <summary>
-    /// Implementação de IPasswordHasher com BCrypt (sem depender de ASP.NET Identity).
-    /// </summary>
-    public sealed class PasswordHasher : IPasswordHasher
+    public class PasswordHasher : IPasswordHasher
     {
-        private const int WorkFactor = 12; // ajuste conforme necessário
+        private readonly ILogger<PasswordHasher> _logger;
 
-        public string HashPassword(string password)
+        public PasswordHasher(ILogger<PasswordHasher> logger) { _logger = logger; }
+
+        public string HashPassword(string password) => BCrypt.Net.BCrypt.HashPassword(password);
+
+        public bool VerifyPassword(string password, string hashedPassword)
         {
-            if (string.IsNullOrWhiteSpace(password))
-                throw new ArgumentException("Senha não pode ser vazia.", nameof(password));
+            try
+            {
+                if (string.IsNullOrEmpty(password) || string.IsNullOrEmpty(hashedPassword)) return false;
 
-            return BCrypt.Net.BCrypt.HashPassword(password, workFactor: WorkFactor);
+                if (hashedPassword.StartsWith("$2a$") || hashedPassword.StartsWith("$2b$") || hashedPassword.StartsWith("$2y$"))
+                    return BCrypt.Net.BCrypt.Verify(password, hashedPassword);
+
+                if (IsBase64Sha256(hashedPassword))
+                {
+                    using var sha256 = SHA256.Create();
+                    var hash = sha256.ComputeHash(Encoding.UTF8.GetBytes(password));
+                    var b64 = Convert.ToBase64String(hash);
+                    return string.Equals(b64, hashedPassword, StringComparison.Ordinal);
+                }
+
+                return string.Equals(password, hashedPassword, StringComparison.Ordinal);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Erro ao verificar senha");
+                return false;
+            }
         }
 
-        public bool VerifyPassword(string password, string passwordHash)
+        private static bool IsBase64Sha256(string s)
         {
-            if (string.IsNullOrWhiteSpace(passwordHash))
-                return false;
-
-            return BCrypt.Net.BCrypt.Verify(password, passwordHash);
+            if (s.Length != 44) return false;
+            try { return Convert.FromBase64String(s).Length == 32; } catch { return false; }
         }
     }
 }

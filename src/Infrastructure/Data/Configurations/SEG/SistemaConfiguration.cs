@@ -4,27 +4,31 @@ using RhSensoWebApi.Core.Entities.SEG;
 
 namespace RhSensoWebApi.Infrastructure.Data.Configurations.SEG
 {
-    public sealed class SistemaConfiguration : IEntityTypeConfiguration<Sistema>
+    public class SistemaConfiguration : IEntityTypeConfiguration<Sistema>
     {
-        public void Configure(EntityTypeBuilder<Sistema> b)
+        public void Configure(EntityTypeBuilder<Sistema> builder)
         {
-            b.ToTable("tsistema", "dbo");
-            b.HasKey(x => x.CdSistema);
+            builder.ToTable("tsistema");
 
-            b.Property(x => x.CdSistema)
-             .HasColumnName("cdsistema")
-             .HasColumnType("char(10)")
-             .IsRequired();
+            builder.HasKey(x => x.CdSistema);
 
-            b.Property(x => x.Descricao)
-             .HasColumnName("dcsistema")
-             .HasMaxLength(60) // mude p/ 255 se sua tabela permitir
-             .IsRequired();
+            builder.Property(x => x.CdSistema)
+                   .HasColumnName("cdsistema")
+                   .HasColumnType("char(10)")
+                   .IsFixedLength()
+                   .HasMaxLength(10)
+                   .IsRequired();
 
-            b.Property(x => x.Ativo)
-             .HasColumnName("flativo")
-             .HasColumnType("bit")
-             .HasDefaultValue(true);
+            builder.Property(x => x.DcSistema)
+                   .HasColumnName("dcsistema")
+                   .HasColumnType("varchar(60)")
+                   .HasMaxLength(60)
+                   .IsRequired();
+
+            builder.Property(x => x.Ativo)
+                   .HasColumnName("ativo")
+                   .HasColumnType("bit")
+                   .IsRequired();
         }
     }
 }

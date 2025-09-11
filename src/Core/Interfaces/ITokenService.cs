@@ -1,13 +1,13 @@
 using RhSensoWebApi.Core.DTOs;
-using RhSensoWebApi.Core.Entities;
+using RhSensoWebApi.Core.Entities.SEG;
 using System.Security.Claims;
 
-namespace RhSensoWebApi.Core.Interfaces;
-
-public interface ITokenService
+namespace RhSensoWebApi.Core.Interfaces
 {
-    string GenerateToken(User user, List<PermissionDto> permissions);
-    bool ValidateToken(string token);
-    ClaimsPrincipal GetPrincipalFromToken(string token);
+    public interface ITokenService
+    {
+        string GenerateToken(Usuario user, List<PermissionDto> permissions);
+        bool ValidateToken(string token);
+        ClaimsPrincipal GetPrincipalFromToken(string token);
+    }
 }
-

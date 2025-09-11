@@ -4,6 +4,9 @@ using RhSensoWebApi.Core.Entities;
 using RhSensoWebApi.Core.Interfaces;
 using RhSensoWebApi.ExpandedTests.Fixtures;
 using System.Text;
+using RhSensoWebApi.Core.Entities.SEG;
+using System.Text.Json;
+using Moq; // Adicionar este using
 
 namespace RhSensoWebApi.ExpandedTests.Helpers;
 
@@ -27,7 +30,7 @@ public static class TestHelpers
 
             // Configurações padrão que podem ser sobrescritas nos testes
             mock.Setup(x => x.GetByUsernameAsync(It.IsAny<string>()))
-                .ReturnsAsync((User?)null);
+                .ReturnsAsync((Usuario?)null);
 
             mock.Setup(x => x.GetUserPermissionsAsync(It.IsAny<string>()))
                 .ReturnsAsync(new List<PermissionDto>());
@@ -38,7 +41,7 @@ public static class TestHelpers
         /// <summary>
         /// Configura o mock do UserRepository para retornar um usuário específico
         /// </summary>
-        public static void SetupUserRepositoryWithUser(Mock<IUserRepository> mock, User user, List<PermissionDto>? permissions = null)
+        public static void SetupUserRepositoryWithUser(Mock<IUserRepository> mock, Usuario user, List<PermissionDto>? permissions = null)
         {
             mock.Setup(x => x.GetByUsernameAsync(user.CdUsuario))
                 .ReturnsAsync(user);
@@ -57,11 +60,9 @@ public static class TestHelpers
         {
             var mock = new Mock<ITokenService>();
 
-            // Configuração padrão para gerar token
-            mock.Setup(x => x.GenerateToken(It.IsAny<User>(), It.IsAny<List<PermissionDto>>()))
+            mock.Setup(x => x.GenerateToken(It.IsAny<Usuario>(), It.IsAny<List<PermissionDto>>()))
                 .Returns("mock_jwt_token_12345");
 
-            // Configuração padrão para validar token
             mock.Setup(x => x.ValidateToken(It.IsAny<string>()))
                 .Returns(true);
 
@@ -241,13 +242,13 @@ public static class TestHelpers
         /// <summary>
         /// Cria um conjunto padrão de usuários para testes
         /// </summary>
-        public static List<User> CreateStandardTestUsers()
+        public static List<Usuario> CreateStandardTestUsers()
         {
-            return new List<User>
+            return new List<Usuario>
             {
-                TestDataBuilder.User().AsAdmin().WithId(1).Build(),
-                TestDataBuilder.User().AsRegularUser().WithId(2).Build(),
-                TestDataBuilder.User().AsInactiveUser().WithId(3).Build()
+                TestDataBuilder.User().AsAdmin().WithId(Guid.NewGuid()).Build(),
+                TestDataBuilder.User().AsRegularUser().WithId(Guid.NewGuid()).Build(),
+                TestDataBuilder.User().AsInactiveUser().WithId(Guid.NewGuid()).Build()
             };
         }
 
@@ -343,4 +344,3 @@ public class AssertionException : Exception
     public AssertionException(string message) : base(message) { }
     public AssertionException(string message, Exception innerException) : base(message, innerException) { }
 }
-

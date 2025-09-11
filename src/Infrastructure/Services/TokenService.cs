@@ -2,127 +2,128 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 using RhSensoWebApi.Core.DTOs;
-using RhSensoWebApi.Core.Entities;
+using RhSensoWebApi.Core.Entities.SEG;
 using RhSensoWebApi.Core.Interfaces;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 
-namespace RhSensoWebApi.Infrastructure.Services;
-
-public class TokenService : ITokenService
+namespace RhSensoWebApi.Infrastructure.Services
 {
-    private readonly IConfiguration _configuration;
-    private readonly ILogger<TokenService> _logger;
-
-    public TokenService(IConfiguration configuration, ILogger<TokenService> logger)
+    public class TokenService : ITokenService
     {
-        _configuration = configuration;
-        _logger = logger;
-    }
+        private readonly IConfiguration _configuration;
+        private readonly ILogger<TokenService> _logger;
 
-    public string GenerateToken(User user, List<PermissionDto> permissions)
-    {
-        try
+        public TokenService(IConfiguration configuration, ILogger<TokenService> logger)
         {
-            var jwtSettings = _configuration.GetSection("JWT");
-            var key = Encoding.ASCII.GetBytes(jwtSettings["Key"]!);
+            _configuration = configuration;
+            _logger = logger;
+        }
 
-            var claims = new List<Claim>
+        public string GenerateToken(Usuario user, List<PermissionDto> permissions)
+        {
+            try
             {
-                new(ClaimTypes.Name, user.CdUsuario),
-                new(ClaimTypes.NameIdentifier, user.Id.ToString()),
-                new(ClaimTypes.Email, user.EmailUsuario),
-                new("empresa", user.CdEmpresa),
-                new("filial", user.CdFilial),
-                new("tpusuario", user.TpUsuario),
-                new("flativo", user.FlAtivo.ToString().ToLower()),
-                new("idfuncionario", user.IdFuncionario.ToString()),
-                new(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
-                new(JwtRegisteredClaimNames.Iat,
-                    DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(),
-                    ClaimValueTypes.Integer64)
-            };
+                var jwt = _configuration.GetSection("JWT");
+                var keyBytes = Encoding.ASCII.GetBytes(jwt["Key"]!);
 
-            // Adicionar permissões como claims (formato compacto)
-            foreach (var permission in permissions)
-            {
-                claims.Add(new Claim("permission",
-                    $"{permission.CdSistema}:{permission.CdFuncao}:{permission.CdAcoes}:{permission.CdRestric}"));
+                var claims = new List<Claim>
+                {
+                    new Claim(ClaimTypes.Name, user.CdUsuario),
+                    new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()),
+                    new Claim(ClaimTypes.Email, user.EmailUsuario ?? string.Empty),
+
+                    new Claim("empresa",       user.CdEmpresa?.ToString() ?? string.Empty),
+                    new Claim("filial",        user.CdFilial?.ToString() ?? string.Empty),
+                    new Claim("tpusuario",     user.TpUsuario ?? string.Empty),
+                    new Claim("flativo",       (user.FlAtivo ?? string.Empty).ToLowerInvariant()),
+                    new Claim("idfuncionario", user.IdFuncionario?.ToString() ?? string.Empty),
+
+                    new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+                    new Claim(JwtRegisteredClaimNames.Iat,
+                              DateTimeOffset.UtcNow.ToUnixTimeSeconds().ToString(),
+                              ClaimValueTypes.Integer64)
+                };
+
+                if (permissions != null)
+                {
+                    foreach (var p in permissions)
+                    {
+                        claims.Add(new Claim("perm", $"{p.CdSistema}:{p.CdFuncao}:{p.CdAcoes}:{p.CdRestric}"));
+                    }
+                }
+
+                var descriptor = new SecurityTokenDescriptor
+                {
+                    Subject = new ClaimsIdentity(claims),
+                    Expires = DateTime.UtcNow.AddMinutes(int.Parse(jwt["ExpiryMinutes"]!)),
+                    Issuer = jwt["Issuer"],
+                    Audience = jwt["Audience"],
+                    SigningCredentials = new SigningCredentials(
+                        new SymmetricSecurityKey(keyBytes),
+                        SecurityAlgorithms.HmacSha256Signature)
+                };
+
+                var handler = new JwtSecurityTokenHandler();
+                var token = handler.CreateToken(descriptor);
+                return handler.WriteToken(token);
             }
-
-            var tokenDescriptor = new SecurityTokenDescriptor
+            catch (Exception ex)
             {
-                Subject = new ClaimsIdentity(claims),
-                Expires = DateTime.UtcNow.AddMinutes(int.Parse(jwtSettings["ExpiryMinutes"]!)),
-                Issuer = jwtSettings["Issuer"],
-                Audience = jwtSettings["Audience"],
-                SigningCredentials = new SigningCredentials(
-                    new SymmetricSecurityKey(key),
-                    SecurityAlgorithms.HmacSha256Signature)
-            };
-
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var token = tokenHandler.CreateToken(tokenDescriptor);
-
-            return tokenHandler.WriteToken(token);
+                _logger.LogError(ex, "Erro ao gerar token para usuário {Usuario}", user.CdUsuario);
+                throw;
+            }
         }
-        catch (Exception ex)
+
+        public bool ValidateToken(string token)
         {
-            _logger.LogError(ex, "Erro ao gerar token para usuário: {UserId}", user.CdUsuario);
-            throw;
+            try
+            {
+                var jwt = _configuration.GetSection("JWT");
+                var keyBytes = Encoding.ASCII.GetBytes(jwt["Key"]!);
+
+                var handler = new JwtSecurityTokenHandler();
+                var parameters = new TokenValidationParameters
+                {
+                    ValidateIssuerSigningKey = true,
+                    IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
+                    ValidateIssuer = true,
+                    ValidIssuer = jwt["Issuer"],
+                    ValidateAudience = true,
+                    ValidAudience = jwt["Audience"],
+                    ValidateLifetime = true,
+                    ClockSkew = TimeSpan.Zero
+                };
+
+                handler.ValidateToken(token, parameters, out SecurityToken _);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
-    }
 
-    public bool ValidateToken(string token)
-    {
-        try
+        public ClaimsPrincipal GetPrincipalFromToken(string token)
         {
-            var jwtSettings = _configuration.GetSection("JWT");
-            var key = Encoding.ASCII.GetBytes(jwtSettings["Key"]!);
+            var jwt = _configuration.GetSection("JWT");
+            var keyBytes = Encoding.ASCII.GetBytes(jwt["Key"]!);
 
-            var tokenHandler = new JwtSecurityTokenHandler();
-            var validationParameters = new TokenValidationParameters
+            var handler = new JwtSecurityTokenHandler();
+            var parameters = new TokenValidationParameters
             {
                 ValidateIssuerSigningKey = true,
-                IssuerSigningKey = new SymmetricSecurityKey(key),
+                IssuerSigningKey = new SymmetricSecurityKey(keyBytes),
                 ValidateIssuer = true,
-                ValidIssuer = jwtSettings["Issuer"],
+                ValidIssuer = jwt["Issuer"],
                 ValidateAudience = true,
-                ValidAudience = jwtSettings["Audience"],
-                ValidateLifetime = true,
+                ValidAudience = jwt["Audience"],
+                ValidateLifetime = false,
                 ClockSkew = TimeSpan.Zero
             };
 
-            tokenHandler.ValidateToken(token, validationParameters, out SecurityToken validatedToken);
-            return true;
+            return handler.ValidateToken(token, parameters, out SecurityToken _);
         }
-        catch
-        {
-            return false;
-        }
-    }
-
-    public ClaimsPrincipal GetPrincipalFromToken(string token)
-    {
-        var jwtSettings = _configuration.GetSection("JWT");
-        var key = Encoding.ASCII.GetBytes(jwtSettings["Key"]!);
-
-        var tokenHandler = new JwtSecurityTokenHandler();
-        var validationParameters = new TokenValidationParameters
-        {
-            ValidateIssuerSigningKey = true,
-            IssuerSigningKey = new SymmetricSecurityKey(key),
-            ValidateIssuer = true,
-            ValidIssuer = jwtSettings["Issuer"],
-            ValidateAudience = true,
-            ValidAudience = jwtSettings["Audience"],
-            ValidateLifetime = false, // Não validar expiração aqui
-            ClockSkew = TimeSpan.Zero
-        };
-
-        var principal = tokenHandler.ValidateToken(token, validationParameters, out SecurityToken validatedToken);
-        return principal;
     }
 }
-

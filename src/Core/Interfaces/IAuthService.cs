@@ -10,4 +10,3 @@ public interface IAuthService
     Task<bool> CheckBotaoAsync(string userId, string sistema, string funcao, string acao);
     Task<char> CheckRestricaoAsync(string userId, string sistema, string funcao);
 }
-

@@ -1,14 +1,21 @@
+ï»¿using System.ComponentModel.DataAnnotations;
+using System.ComponentModel.DataAnnotations.Schema;
+
 namespace RhSensoWebApi.Core.Entities.SEG
 {
-    /// <summary>dbo.tsistema</summary>
+    [Table("tsistema")]
     public class Sistema
     {
-        public string CdSistema { get; set; } = string.Empty;  // PK char(10)
-        public string Descricao { get; set; } = string.Empty;  // dcsistema (60..255)
-        public bool Ativo { get; set; } = true;          // se existir a coluna
+        [Key]
+        [Column("cdsistema", TypeName = "char(10)")]
+        [MaxLength(10)]
+        public string CdSistema { get; set; } = string.Empty;
 
-        // Navegações usadas em Includes/relacionamentos existentes
-        public ICollection<UserGroup> UserGroups { get; set; } = new List<UserGroup>();
-        public ICollection<GroupPermission> GroupPermissions { get; set; } = new List<GroupPermission>();
+        [Column("dcsistema", TypeName = "varchar(60)")]
+        [MaxLength(60)]
+        public string DcSistema { get; set; } = string.Empty;
+
+        [Column("ativo", TypeName = "bit")]
+        public bool Ativo { get; set; } = true;
     }
 }

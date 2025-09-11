@@ -15,3 +15,7 @@ dotnet user-secrets list
 
 
 
+
+
+
+*#oM0LoG@c@0

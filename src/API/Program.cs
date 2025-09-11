@@ -14,6 +14,8 @@
 //    - 🔹 Auditoria & Soft-Delete (Item 6): registra interceptor do EF e injeta no DbContext.
 // --------------------------------------------------------------------------------------
 
+using FluentValidation;
+using FluentValidation.AspNetCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Mvc;                    // ApiBehaviorOptions
@@ -31,9 +33,9 @@ using RhSensoWebApi.Core.Common.Exceptions;       // BaseResponse, ErrorDto
 using RhSensoWebApi.Core.Interfaces;
 using RhSensoWebApi.Core.Services;
 using RhSensoWebApi.Infrastructure;
-using RhSensoWebApi.Infrastructure.Cache;
+//using RhSensoWebApi.Infrastructure.Cache;
 using RhSensoWebApi.Infrastructure.Data.Context;
-using RhSensoWebApi.Infrastructure.Data.Repositories;
+//using RhSensoWebApi.Infrastructure.Data.Repositories;
 using RhSensoWebApi.Infrastructure.Services;
 using RhSensoWebApi.Infrastructure.Services.SEG.Botoes;
 using RhSensoWebApi.Infrastructure.Services.SEG.Sistemas;
@@ -43,8 +45,12 @@ using Serilog.Events;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using FluentValidation;
-using FluentValidation.AspNetCore;
+using Microsoft.EntityFrameworkCore;
+using RhSensoWebApi.Core.Interfaces;
+using RhSensoWebApi.Infrastructure.Data;
+using RhSensoWebApi.Infrastructure.Data.Repositories;
+using RhSensoWebApi.Infrastructure.Services;
+
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -139,6 +145,13 @@ builder.Services.Configure<ApiBehaviorOptions>(options =>
         return new BadRequestObjectResult(resp);
     };
 });
+
+
+// Repositórios/Serviços (todos em "Usuario")
+builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
+builder.Services.AddScoped<IPasswordHasher, PasswordHasher>();
+builder.Services.AddScoped<ITokenService, TokenService>();
+
 
 // -------------------------
 // 🔹 Item 6 — Auditoria & Soft-Delete (DI)
@@ -303,7 +316,7 @@ builder.Services.AddHealthChecks()
 // -------------------------
 // Dependency Injection (Repos/Serviços)
 // -------------------------
-builder.Services.AddScoped<IUserRepository, UserRepository>();
+builder.Services.AddScoped<IUsuarioRepository, UsuarioRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<ITokenService, TokenService>();
 builder.Services.AddScoped<ICacheService, CacheService>();

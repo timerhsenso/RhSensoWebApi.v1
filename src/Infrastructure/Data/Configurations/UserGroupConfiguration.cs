@@ -8,37 +8,28 @@ public class UserGroupConfiguration : IEntityTypeConfiguration<UserGroup>
 {
     public void Configure(EntityTypeBuilder<UserGroup> builder)
     {
-        builder.ToTable("usrh1");
+        builder.ToTable("tgrus1");
 
-        builder.HasKey(x => new { x.CdUsuario, x.CdGrUser, x.CdSistema });
+        builder.HasKey(x => new { x.CdUsuario, x.CdSistema, x.CdGrUser });
 
-        builder.Property(x => x.CdUsuario)
-            .HasColumnName("cdusuario")
-            .HasMaxLength(50);
+        builder.Property(x => x.CdUsuario).HasMaxLength(30).IsRequired();
+        builder.Property(x => x.CdSistema).HasMaxLength(10).IsRequired();
+        builder.Property(x => x.CdGrUser).HasMaxLength(10).IsRequired();
 
-        builder.Property(x => x.CdGrUser)
-            .HasColumnName("cdgruser")
-            .HasMaxLength(50);
+        builder.Property(x => x.DtFimVal).HasColumnType("datetime");
 
-        builder.Property(x => x.CdSistema)
-            .HasColumnName("cdsistema")
-            .HasMaxLength(10);
+        // FK correta para Usuario (sem pedir coleção em Usuario)
+        builder
+            .HasOne(x => x.Usuario)
+            .WithMany()
+            .HasForeignKey(x => x.CdUsuario)
+            .HasPrincipalKey(u => u.CdUsuario);
 
-        builder.Property(x => x.DtFimVal)
-            .HasColumnName("dtfimval");
-
-        // Relacionamentos
-        builder.HasOne(x => x.User)
-            .WithMany(x => x.UserGroups)
-            .HasForeignKey(x => x.CdUsuario);
-
-        builder.HasOne(x => x.Sistema)
-            .WithMany(x => x.UserGroups)
-            .HasForeignKey(x => x.CdSistema);
-
-        // Índices
-        builder.HasIndex(x => new { x.CdUsuario, x.CdSistema });
-        builder.HasIndex(x => x.DtFimVal);
+        // (opcional) FK para Sistema, se desejar navegação
+        builder
+            .HasOne(x => x.Sistema)
+            .WithMany()
+            .HasForeignKey(x => x.CdSistema)
+            .HasPrincipalKey(s => s.CdSistema);
     }
 }
-

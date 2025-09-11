@@ -1,100 +1,75 @@
-using Microsoft.Extensions.Caching.Distributed;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 using RhSensoWebApi.Core.Interfaces;
-using System.Text.Json;
 
-namespace RhSensoWebApi.Infrastructure.Cache;
+namespace RhSensoWebApi.Infrastructure.Services;
 
 public class CacheService : ICacheService
 {
-    private readonly IMemoryCache _memoryCache;
-    private readonly IDistributedCache? _distributedCache;
+    private readonly IMemoryCache _cache;
     private readonly ILogger<CacheService> _logger;
 
-    public CacheService(
-        IMemoryCache memoryCache,
-        IDistributedCache? distributedCache,
-        ILogger<CacheService> logger)
+    public CacheService(IMemoryCache cache, ILogger<CacheService> logger)
     {
-        _memoryCache = memoryCache;
-        _distributedCache = distributedCache;
+        _cache = cache;
         _logger = logger;
     }
 
-    public async Task<T?> GetAsync<T>(string key)
+    public Task<T> GetAsync<T>(string key)
     {
         try
         {
-            // L1 Cache (Memory) - Mais rápido
-            if (_memoryCache.TryGetValue(key, out T? value))
+            if (_cache.TryGetValue(key, out var value) && value is T typedValue)
             {
-                return value;
+                return Task.FromResult(typedValue);
             }
 
-            // L2 Cache (Redis) - Para dados distribuídos
-            if (_distributedCache != null)
-            {
-                var distributedValue = await _distributedCache.GetStringAsync(key);
-                if (distributedValue != null)
-                {
-                    value = JsonSerializer.Deserialize<T>(distributedValue);
-                    // Armazenar no L1 para próximas consultas
-                    _memoryCache.Set(key, value, TimeSpan.FromMinutes(5));
-                    return value;
-                }
-            }
-
-            return default;
+            return Task.FromResult(default(T)!);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro ao recuperar item do cache: {Key}", key);
-            return default;
+            return Task.FromResult(default(T)!);
         }
     }
 
-    public async Task SetAsync<T>(string key, T value, TimeSpan? expiry = null)
+    public Task SetAsync<T>(string key, T value, TimeSpan expiration)
     {
         try
         {
-            var expiryTime = expiry ?? TimeSpan.FromMinutes(30);
-
-            // L1 Cache (Memory)
-            _memoryCache.Set(key, value, expiryTime);
-
-            // L2 Cache (Redis)
-            if (_distributedCache != null && value != null)
+            var options = new MemoryCacheEntryOptions
             {
-                var serializedValue = JsonSerializer.Serialize(value);
-                var options = new DistributedCacheEntryOptions
-                {
-                    AbsoluteExpirationRelativeToNow = expiryTime
-                };
-                await _distributedCache.SetStringAsync(key, serializedValue, options);
-            }
+                AbsoluteExpirationRelativeToNow = expiration,
+                SlidingExpiration = TimeSpan.FromMinutes(5)
+            };
+
+            _cache.Set(key, value, options);
+            return Task.CompletedTask;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro ao armazenar item no cache: {Key}", key);
+            return Task.CompletedTask;
         }
     }
 
-    public async Task RemoveAsync(string key)
+    public Task RemoveAsync(string key)
     {
         try
         {
-            _memoryCache.Remove(key);
-
-            if (_distributedCache != null)
-            {
-                await _distributedCache.RemoveAsync(key);
-            }
+            _cache.Remove(key);
+            return Task.CompletedTask;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Erro ao remover item do cache: {Key}", key);
+            return Task.CompletedTask;
         }
     }
-}
 
+    public Task RemoveByPatternAsync(string pattern)
+    {
+        _logger.LogWarning("RemoveByPattern não implementado para MemoryCache: {Pattern}", pattern);
+        return Task.CompletedTask;
+    }
+}

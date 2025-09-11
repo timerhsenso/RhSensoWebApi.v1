@@ -1,5 +1,6 @@
 using RhSensoWebApi.Core.DTOs;
 using RhSensoWebApi.Core.Entities;
+using RhSensoWebApi.Core.Entities.SEG;
 
 namespace RhSensoWebApi.ExpandedTests.Fixtures;
 
@@ -14,28 +15,28 @@ public class TestDataBuilder
     /// </summary>
     public class UserBuilder
     {
-        private User _user;
+        private Usuario _user;
 
         public UserBuilder()
         {
             // Valores padrão para um usuário de teste
-            _user = new User
+            _user = new Usuario
             {
                 CdUsuario = "test_user",
                 DcUsuario = "Usuário de Teste",
                 SenhaUser = "$2a$11$rQiU8Z8Z8Z8Z8Z8Z8Z8Z8O", // Hash padrão para "test123"
-                FlAtivo = true,
+                FlAtivo = "S",
                 EmailUsuario = "test@example.com",
-                CdEmpresa = "EMP01",
-                CdFilial = "FIL01",
+                CdEmpresa = 1,
+                CdFilial = 1,
                 TpUsuario = "USER",
-                Id = 1,
+                Id = Guid.NewGuid(),
                 IdFuncionario = 100,
-                NormalizedUsername = "test_user",
-                FlNaoRecebeEmail = false,
-                NmImpcche = "TEST_PRINTER",
+                NormalizedUserName = "TEST_USER",
+                FlNaoRecebeEmail = "N",
+                NmImpCChe = "TEST_PRINTER",
                 NoMatric = "12345",
-                NoUser = "Test User"
+                NoUser = 1
             };
         }
 
@@ -45,7 +46,7 @@ public class TestDataBuilder
         public UserBuilder WithCdUsuario(string cdUsuario)
         {
             _user.CdUsuario = cdUsuario;
-            _user.NormalizedUsername = cdUsuario.ToUpper();
+            _user.NormalizedUserName = cdUsuario.ToUpper();
             return this;
         }
 
@@ -72,7 +73,7 @@ public class TestDataBuilder
         /// </summary>
         public UserBuilder WithFlAtivo(bool flAtivo)
         {
-            _user.FlAtivo = flAtivo;
+            _user.FlAtivo = flAtivo ? "S" : "N";
             return this;
         }
 
@@ -88,7 +89,7 @@ public class TestDataBuilder
         /// <summary>
         /// Define a empresa do usuário
         /// </summary>
-        public UserBuilder WithEmpresa(string cdEmpresa)
+        public UserBuilder WithEmpresa(int cdEmpresa)
         {
             _user.CdEmpresa = cdEmpresa;
             return this;
@@ -97,7 +98,7 @@ public class TestDataBuilder
         /// <summary>
         /// Define a filial do usuário
         /// </summary>
-        public UserBuilder WithFilial(string cdFilial)
+        public UserBuilder WithFilial(int cdFilial)
         {
             _user.CdFilial = cdFilial;
             return this;
@@ -115,7 +116,7 @@ public class TestDataBuilder
         /// <summary>
         /// Define o ID do usuário
         /// </summary>
-        public UserBuilder WithId(int id)
+        public UserBuilder WithId(Guid id)
         {
             _user.Id = id;
             return this;
@@ -124,7 +125,7 @@ public class TestDataBuilder
         /// <summary>
         /// Define o ID do funcionário
         /// </summary>
-        public UserBuilder WithIdFuncionario(int idFuncionario)
+        public UserBuilder WithIdFuncionario(int? idFuncionario)
         {
             _user.IdFuncionario = idFuncionario;
             return this;
@@ -164,9 +165,9 @@ public class TestDataBuilder
         }
 
         /// <summary>
-        /// Constrói o objeto User
+        /// Constrói o objeto Usuario
         /// </summary>
-        public User Build()
+        public Usuario Build()
         {
             return _user;
         }
@@ -343,4 +344,3 @@ public class TestDataBuilder
     /// </summary>
     public static LoginRequestBuilder LoginRequest() => new LoginRequestBuilder();
 }
-
