@@ -61,15 +61,24 @@ namespace RhSensoWeb
                 options.HeaderName = "RequestVerificationToken";
             });
 
-            // **Permissões** (serviço usado pelas TagHelpers)
+            // ✅ **PERMISSÕES** - Registra o serviço usado pelos TagHelpers
             builder.Services.AddScoped<IPermissionProvider, PermissionProvider>();
 
-            // API base URL (appsettings Api:BaseUrl)
+            // ✅ **LOGS DETALHADOS** - Só em Development para debug
+            if (builder.Environment.IsDevelopment())
+            {
+                builder.Logging.SetMinimumLevel(LogLevel.Information); // ← ADICIONADO: nível mínimo
+                builder.Logging.AddFilter("RhSensoWeb.Services.Security", LogLevel.Information);
+                builder.Logging.AddFilter("RhSensoWeb.TagHelpers", LogLevel.Information);
+                builder.Logging.AddFilter("System.Net.Http.HttpClient", LogLevel.Information); // ← ADICIONADO: para ver chamadas HTTP
+            }
+
+            // ✅ **API BASE URL** - Configuração da URL da API
             var apiBaseUrl = builder.Configuration["Api:BaseUrl"]
                 ?? throw new InvalidOperationException("Configure 'Api:BaseUrl' em appsettings.*");
             if (!apiBaseUrl.EndsWith("/")) apiBaseUrl += "/";
 
-            // HttpClient "Api" com AuthTokenHandler e Resilience padrão
+            // ✅ **HTTP CLIENTS** - Cliente tipado para a API com token e resiliência
             builder.Services.AddTransient<AuthTokenHandler>();
 
             builder.Services.AddHttpClient("Api", client =>
@@ -84,12 +93,16 @@ namespace RhSensoWeb
             builder.Logging.AddConsole();
 
             // ---------------------------------------------------------------
-            // Pipeline
+            // Pipeline (Middleware Order é CRÍTICO!)
             // ---------------------------------------------------------------
             var app = builder.Build();
 
-            app.Logger.LogInformation("➡ API Base URL: {Url}", apiBaseUrl);
+            // ✅ **LOG INICIAL** - Mostra a URL da API no startup
+            app.Logger.LogInformation("🚀 RhSensoWeb iniciado");
+            app.Logger.LogInformation("📡 API Base URL: {ApiUrl}", apiBaseUrl);
+            app.Logger.LogInformation("🌍 Ambiente: {Environment}", app.Environment.EnvironmentName);
 
+            // ✅ **EXCEPTION HANDLING** - Páginas de erro
             if (!app.Environment.IsDevelopment())
             {
                 app.UseExceptionHandler("/Home/Error");
@@ -97,18 +110,20 @@ namespace RhSensoWeb
             }
             else
             {
-                app.UseDeveloperExceptionPage(); // útil em Development
+                app.UseDeveloperExceptionPage(); // ✅ útil em Development
             }
 
+            // ✅ **PIPELINE PADRÃO** - Ordem correta dos middlewares
             app.UseHttpsRedirection();
             app.UseStaticFiles();
-
             app.UseRouting();
 
-            app.UseAuthentication();
-            app.UseSession();        // precisa antes dos endpoints
-            app.UseAuthorization();
+            // ⚠️ **ORDEM CRÍTICA**: Authentication → Session → Authorization
+            app.UseAuthentication();  // 1️⃣ Primeiro: lê o cookie de autenticação
+            app.UseSession();         // 2️⃣ Depois: habilita a sessão (precisa do token para cache)
+            app.UseAuthorization();   // 3️⃣ Por último: valida permissões
 
+            // ✅ **ROTAS** - Areas primeiro, depois default
             app.MapControllerRoute(
                 name: "areas",
                 pattern: "{area:exists}/{controller=Home}/{action=Index}/{id?}");
@@ -117,36 +132,47 @@ namespace RhSensoWeb
                 name: "default",
                 pattern: "{controller=Home}/{action=Index}/{id?}");
 
+            // ✅ **STARTUP FINALIZADO**
+            app.Logger.LogInformation("✅ Aplicação configurada. Iniciando servidor...");
             app.Run();
         }
     }
 
     // ==========================================================================
-    // TIPOS AUXILIARES (depois do Program)
+    // 🔒 AUTH TOKEN HANDLER - Injeta Bearer Token nas requisições para a API
     // ==========================================================================
 
     /// <summary>
     /// Injeta Authorization: Bearer {token} nas chamadas à API.
-    /// Agora PRIORIZA a Session. Mantém leitura do cookie apenas como fallback.
+    /// Prioriza a Session (server-side), usa cookie como fallback.
+    /// 
+    /// FLUXO:
+    /// 1. Usuario faz login → token vai para Session["AuthToken"]
+    /// 2. TagHelpers fazem requisição → AuthTokenHandler pega token da sessão
+    /// 3. Requisição para API vai com "Authorization: Bearer {token}"
     /// </summary>
     internal sealed class AuthTokenHandler : DelegatingHandler
     {
         private readonly IHttpContextAccessor _http;
+
         public AuthTokenHandler(IHttpContextAccessor http) => _http = http;
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             var ctx = _http.HttpContext;
 
-            // 1) Session (server-side)
+            // 🥇 Prioridade 1: Session (server-side) - mais seguro
             var token = ctx?.Session.GetString("AuthToken");
 
-            // 2) (fallback) cookie legado
+            // 🥈 Prioridade 2: Cookie (client-side) - fallback para compatibilidade
             if (string.IsNullOrWhiteSpace(token))
                 token = ctx?.Request.Cookies["AuthToken"];
 
+            // ✅ Se encontrou token, adiciona no header Authorization
             if (!string.IsNullOrWhiteSpace(token))
+            {
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+            }
 
             return base.SendAsync(request, ct);
         }

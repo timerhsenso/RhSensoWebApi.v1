@@ -1,0 +1,314 @@
+﻿@{
+    ViewData["Title"] = "🔒 Debug de Permissões";
+}
+
+<div class="container-fluid mt-3">
+
+    <div class="row">
+        <div class="col-12">
+            <h2>🔒 Debug de Permissões - TagHelpers</h2>
+
+            <div class="alert alert-info">
+                <strong>📋 Checklist de Debug:</strong>
+                <ol class="mb-0">
+                    <li>✅ Faça login</li>
+                    <li>✅ Abra o console do navegador (F12)</li>
+                    <li>✅ Verifique os logs no terminal da aplicação</li>
+                    <li>✅ Teste os botões abaixo</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <!-- DEBUG INFO -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>🔍 Informações de Debug</h5>
+                </div>
+                <div class="card-body">
+                    <button class="btn btn-secondary me-2" onclick="debugPermissions()">🔄 Carregar Permissões</button>
+                    <button class="btn btn-secondary me-2" onclick="debugWhoAmI()">👤 Who Am I</button>
+                    <button class="btn btn-secondary" onclick="clearDebug()">🗑️ Limpar</button>
+                    <div id="debug-output" class="mt-3" style="min-height: 100px; background: #f8f9fa; padding: 10px; border-radius: 5px;">
+                        <em>Clique nos botões acima para debugar...</em>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TESTES DE TagHelper -->
+    <div class="row">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5>🔹 app-disable-when-denied (desabilita se negado)</h5>
+                </div>
+                <div class="card-body">
+
+                    <!-- DEVE FICAR HABILITADO: se você tem a ação C -->
+                    <div class="mb-3">
+                        <h6>Teste 1: RHU + RHU_FM_PPRA_ESOCIAL + ação C</h6>
+                        <button class="btn btn-outline-primary"
+                                app-disable-when-denied
+                                app-sistema="RHU"
+                                app-funcao="RHU_FM_PPRA_ESOCIAL"
+                                app-acao="C">
+                            Habilitado se tiver ação C
+                        </button>
+                        <small class="text-muted d-block">Deve estar habilitado se você tiver a ação C</small>
+                    </div>
+
+                    <!-- DEVE FICAR DESABILITADO: ação inexistente -->
+                    <div class="mb-3">
+                        <h6>Teste 2: RHU + RHU_FM_PPRA_ESOCIAL + ação Z (inexistente)</h6>
+                        <button class="btn btn-outline-warning"
+                                app-disable-when-denied
+                                app-sistema="RHU"
+                                app-funcao="RHU_FM_PPRA_ESOCIAL"
+                                app-acao="Z"
+                                app-disabled-title="Você não tem a ação Z">
+                            Desabilitado (ação Z)
+                        </button>
+                        <small class="text-muted d-block">Deve estar desabilitado (ação Z não existe)</small>
+                    </div>
+
+                    <!-- DEVE FICAR DESABILITADO: sistema inexistente -->
+                    <div class="mb-3">
+                        <h6>Teste 3: Sistema inexistente</h6>
+                        <button class="btn btn-outline-danger"
+                                app-disable-when-denied
+                                app-sistema="INEXISTENTE"
+                                app-funcao="INEXISTENTE">
+                            Desabilitado (sistema inexistente)
+                        </button>
+                        <small class="text-muted d-block">Deve estar desabilitado (sistema não existe)</small>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TESTES MANUAIS -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5>🧪 Testes Manuais de API</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <button class="btn btn-secondary w-100 mb-2" onclick="testPermissionCheck('RHU', 'RHU_FM_PPRA_ESOCIAL', null)">
+                                Testar Função RHU
+                            </button>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-secondary w-100 mb-2" onclick="testPermissionCheck('RHU', 'RHU_FM_PPRA_ESOCIAL', 'C')">
+                                Testar Ação C
+                            </button>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-secondary w-100 mb-2" onclick="testPermissionCheck('FAKE', 'FAKE', 'X')">
+                                Testar Inexistente
+                            </button>
+                        </div>
+                    </div>
+                    <div id="manual-test-output" class="mt-3" style="background: #f8f9fa; padding: 10px; border-radius: 5px; min-height: 50px;">
+                        <em>Clique nos botões acima para testar...</em>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        // Debug de permissões
+        async function debugPermissions() {
+            const output = document.getElementById('debug-output');
+            output.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Carregando permissões...';
+
+            try {
+                const response = await fetch('/Debug/Permissions');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.text();
+                const parsed = JSON.parse(data);
+
+                output.innerHTML = `
+                    <h6>✅ Permissões carregadas:</h6>
+                    <div><strong>Success:</strong> ${parsed.success}</div>
+                    <div><strong>Total:</strong> ${parsed.data?.length || 0} permissões</div>
+                    <div><strong>Primeiras 5:</strong></div>
+                    <pre style="background: white; padding: 10px; border-radius: 3px; font-size: 0.8em;">${
+                        JSON.stringify(parsed.data?.slice(0, 5) || [], null, 2)
+                    }</pre>
+                    <details>
+                        <summary>Ver resposta completa</summary>
+                        <pre style="background: white; padding: 10px; border-radius: 3px; font-size: 0.7em; max-height: 300px; overflow-y: auto;">${JSON.stringify(parsed, null, 2)}</pre>
+                    </details>
+                `;
+            } catch (error) {
+                output.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h6>❌ Erro ao carregar permissões:</h6>
+                        <div>${error.message}</div>
+                    </div>
+                `;
+            }
+        }
+
+        // Debug de usuário
+        async function debugWhoAmI() {
+            const output = document.getElementById('debug-output');
+            output.innerHTML = '<div class="spinner-border spinner-border-sm me-2"></div>Verificando usuário...';
+
+            try {
+                const response = await fetch('/Debug/WhoAmI');
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+
+                const data = await response.json();
+
+                output.innerHTML = `
+                    <h6>✅ Informações do usuário:</h6>
+                    <div><strong>Name:</strong> ${data.name || 'null'}</div>
+                    <div><strong>Autenticado:</strong> ${data.isAuthenticated}</div>
+                    <div><strong>Claims (primeiros 10):</strong></div>
+                    <pre style="background: white; padding: 10px; border-radius: 3px; font-size: 0.8em;">${
+                        JSON.stringify(data.claims?.slice(0, 10) || [], null, 2)
+                    }</pre>
+                `;
+            } catch (error) {
+                output.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h6>❌ Erro ao verificar usuário:</h6>
+                        <div>${error.message}</div>
+                    </div>
+                `;
+            }
+        }
+
+        // Limpar debug
+        function clearDebug() {
+            document.getElementById('debug-output').innerHTML = '<em>Debug limpo. Clique nos botões acima para debugar...</em>';
+            document.getElementById('manual-test-output').innerHTML = '<em>Clique nos botões acima para testar...</em>';
+        }
+
+        // Teste manual de permissão
+        async function testPermissionCheck(sistema, funcao, acao) {
+            const output = document.getElementById('manual-test-output');
+            output.innerHTML = `<div class="spinner-border spinner-border-sm me-2"></div>Testando ${sistema}/${funcao}${acao ? '/' + acao : ''}...`;
+
+            try {
+                let url;
+                if (acao) {
+                    url = `/api/v1/auth/checabotao?sistema=${encodeURIComponent(sistema)}&funcao=${encodeURIComponent(funcao)}&acao=${encodeURIComponent(acao)}`;
+                } else {
+                    url = `/api/v1/auth/checahabilitacao?sistema=${encodeURIComponent(sistema)}&funcao=${encodeURIComponent(funcao)}`;
+                }
+
+                const response = await fetch(url);
+                const data = await response.json();
+
+                const resultClass = data.success && data.data?.allowed ? 'alert-success' : 'alert-warning';
+                const resultIcon = data.success && data.data?.allowed ? '✅' : '❌';
+
+                output.innerHTML = `
+                    <div class="alert ${resultClass}">
+                        <h6>${resultIcon} Teste: ${sistema}/${funcao}${acao ? '/' + acao : ''}</h6>
+                        <div><strong>Permitido:</strong> ${data.data?.allowed || false}</div>
+                        <div><strong>Mensagem:</strong> ${data.message}</div>
+                        <details class="mt-2">
+                            <summary>Ver resposta completa</summary>
+                            <pre style="background: white; padding: 10px; border-radius: 3px; font-size: 0.8em;">${JSON.stringify(data, null, 2)}</pre>
+                        </details>
+                    </div>
+                `;
+            } catch (error) {
+                output.innerHTML = `
+                    <div class="alert alert-danger">
+                        <h6>❌ Erro no teste:</h6>
+                        <div>${error.message}</div>
+                    </div>
+                `;
+            }
+        }
+
+        // Auto-carregar informações ao abrir a página
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🔒 Página de debug de permissões carregada');
+            console.log('💡 Dica: Abra o Network tab do DevTools para ver as requisições HTTP');
+        });
+    </script>
+}
+ app-when-allowed (esconde se negado)</h5>
+</div>
+<div class="card-body">
+
+    <!-- DEVE APARECER: se você tem RHU/RHU_FM_PPRA_ESOCIAL com ação C -->
+    <div class="mb-3">
+        <h6>Teste 1: RHU + RHU_FM_PPRA_ESOCIAL + ação C</h6>
+        <button class="btn btn-primary"
+                app-when-allowed
+                app-sistema="RHU"
+                app-funcao="RHU_FM_PPRA_ESOCIAL"
+                app-acao="C">
+            ✅ DEVE APARECER (ação C)
+        </button>
+        <small class="text-muted d-block">Se este botão não aparecer, você não tem a ação C</small>
+    </div>
+
+    <!-- DEVE SUMIR: ação inexistente -->
+    <div class="mb-3">
+        <h6>Teste 2: RHU + RHU_FM_PPRA_ESOCIAL + ação Z (inexistente)</h6>
+        <button class="btn btn-warning"
+                app-when-allowed
+                app-sistema="RHU"
+                app-funcao="RHU_FM_PPRA_ESOCIAL"
+                app-acao="Z">
+            ❌ DEVE SUMIR (ação Z não existe)
+        </button>
+        <small class="text-muted d-block">Este botão deve sumir se funcionar</small>
+    </div>
+
+    <!-- DEVE APARECER: só verifica função, sem ação -->
+    <div class="mb-3">
+        <h6>Teste 3: RHU + RHU_FM_PPRA_ESOCIAL (só função)</h6>
+        <button class="btn btn-info"
+                app-when-allowed
+                app-sistema="RHU"
+                app-funcao="RHU_FM_PPRA_ESOCIAL">
+            ✅ DEVE APARECER (só função)
+        </button>
+        <small class="text-muted d-block">Verifica só se você tem a função, sem ação específica</small>
+    </div>
+
+    <!-- DEVE SUMIR: sistema/função inexistente -->
+    <div class="mb-3">
+        <h6>Teste 4: Sistema inexistente</h6>
+        <button class="btn btn-danger"
+                app-when-allowed
+                app-sistema="INEXISTENTE"
+                app-funcao="FUNCAO_FAKE">
+            ❌ DEVE SUMIR (sistema inexistente)
+        </button>
+        <small class="text-muted d-block">Sistema e função que não existem</small>
+    </div>
+
+</div>
+</div>
+</div>
+
+<div class="col-md-6">
+    <div class="card">
+        <div class="card-header">
+            <h5>🔹

@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using RhSensoWeb.Models;
 using System.Diagnostics;
@@ -34,6 +35,12 @@ namespace RhSensoWeb.Controllers
         // -----------------------------
         // Testes rápidos da API
         // -----------------------------
+
+        // Adicione esta action no seu HomeController.cs
+
+        [HttpGet("/TestPermissions")]
+        [Authorize] // garante que só usuários logados acessem
+        public IActionResult TestPermissions() => View();
 
         // GET /ping-api  -> chama /health da sua API
         [HttpGet("/ping-api")]

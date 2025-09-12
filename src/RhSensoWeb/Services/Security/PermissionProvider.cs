@@ -1,22 +1,20 @@
 ﻿// src/RhSensoWeb/Services/Security/PermissionProvider.cs
-using System.Net.Http.Json;             // <- necessário para ReadFromJsonAsync
+using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.Logging;
 
 namespace RhSensoWeb.Services.Security
 {
-    // --- DTO que vem da API ---------------------------------------------------
+    // DTO que representa uma permissão (igual ao da API)
     public sealed class PermissionDto
     {
         public string CdSistema { get; set; } = "";
-        public string DcSistema { get; set; } = "";
-        public string CdGrUser { get; set; } = "";
         public string CdFuncao { get; set; } = "";
-        public string CdAcoes { get; set; } = ""; // letras: A C E I P R S ...
-        public char CdRestric { get; set; } = 'N';
+        public string CdAcoes { get; set; } = ""; // ex: "ACEI"
+        public char CdRestric { get; set; } = 'L';
     }
 
-    // Envelope padrão da API (success/message/data)
+    // Envelope da resposta da API
     file sealed class ApiBaseResponse<T>
     {
         public bool Success { get; set; }
@@ -24,7 +22,6 @@ namespace RhSensoWeb.Services.Security
         public T? Data { get; set; }
     }
 
-    // --- Contrato do serviço ---------------------------------------------------
     public interface IPermissionProvider
     {
         Task<IReadOnlyList<PermissionDto>> GetAsync(CancellationToken ct = default);
@@ -32,10 +29,9 @@ namespace RhSensoWeb.Services.Security
         Task<bool> HasActionAsync(string sistema, string funcao, char acao, CancellationToken ct = default);
         Task<char> GetRestricaoAsync(string sistema, string funcao, CancellationToken ct = default);
         Task ReloadAsync(CancellationToken ct = default);
-        Task EnsureLoadedAsync(HttpContext http); // helper para TagHelpers
+        Task EnsureLoadedAsync(HttpContext http);
     }
 
-    // --- Implementação ---------------------------------------------------------
     public sealed class PermissionProvider : IPermissionProvider
     {
         private const string SessionKey = "UserPermissionsJson";
@@ -57,9 +53,13 @@ namespace RhSensoWeb.Services.Security
         public async Task<IReadOnlyList<PermissionDto>> GetAsync(CancellationToken ct = default)
         {
             var ctx = _httpCtx.HttpContext;
-            if (ctx is null) return Array.Empty<PermissionDto>();
+            if (ctx is null)
+            {
+                _logger.LogWarning("HttpContext é null - retornando lista vazia");
+                return Array.Empty<PermissionDto>();
+            }
 
-            // 1) Tenta sessão (cache)
+            // 1) Verifica cache da sessão
             var cached = ctx.Session.GetString(SessionKey);
             if (!string.IsNullOrWhiteSpace(cached))
             {
@@ -68,42 +68,86 @@ namespace RhSensoWeb.Services.Security
                     var list = JsonSerializer.Deserialize<List<PermissionDto>>(
                         cached, new JsonSerializerOptions { PropertyNameCaseInsensitive = true }
                     ) ?? new();
+                    _logger.LogInformation("✅ Permissões do cache: {Count} itens", list.Count);
                     return list;
                 }
-                catch { /* parse falhou? segue para API */ }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "❌ Erro ao deserializar cache de permissões");
+                }
             }
 
             // 2) Busca na API
-            var client = _http.CreateClient("Api"); // BaseAddress + AuthTokenHandler
-            var resp = await client.GetAsync("api/v1/auth/permissions", ct);
-            if (!resp.IsSuccessStatusCode)
+            try
             {
-                _logger.LogWarning("GET /auth/permissions => {Status}", (int)resp.StatusCode);
+                var client = _http.CreateClient("Api");
+
+                // ⚠️ TESTE AMBOS endpoints - primeiro 'permissions', depois 'permissoes'
+                HttpResponseMessage? resp = null;
+                try
+                {
+                    resp = await client.GetAsync("api/v1/auth/permissions", ct);
+                    if (!resp.IsSuccessStatusCode)
+                    {
+                        _logger.LogWarning("Endpoint 'permissions' falhou com {Status}, tentando 'permissoes'",
+                            (int)resp.StatusCode);
+                        resp.Dispose();
+                        resp = await client.GetAsync("api/v1/auth/permissoes", ct);
+                    }
+                }
+                catch
+                {
+                    // Se 'permissions' der erro, tenta 'permissoes'
+                    resp?.Dispose();
+                    resp = await client.GetAsync("api/v1/auth/permissoes", ct);
+                }
+
+                if (!resp.IsSuccessStatusCode)
+                {
+                    _logger.LogWarning("❌ API retornou {Status} para ambos endpoints de permissão",
+                        (int)resp.StatusCode);
+                    return Array.Empty<PermissionDto>();
+                }
+
+                // Deserializa o envelope da resposta
+                var envelope = await resp.Content.ReadFromJsonAsync<ApiBaseResponse<List<PermissionDto>>>(
+                    new JsonSerializerOptions { PropertyNameCaseInsensitive = true }, ct);
+
+                var data = envelope?.Data ?? new List<PermissionDto>();
+
+                // Normaliza e limpa os dados
+                foreach (var p in data)
+                {
+                    p.CdSistema = (p.CdSistema ?? "").Trim().ToUpperInvariant();
+                    p.CdFuncao = (p.CdFuncao ?? "").Trim().ToUpperInvariant();
+                    p.CdAcoes = (p.CdAcoes ?? "").Trim().ToUpperInvariant();
+                    p.CdRestric = char.ToUpperInvariant(p.CdRestric);
+                }
+
+                _logger.LogInformation("✅ API retornou {Count} permissões", data.Count);
+
+                // Log das primeiras para debug
+                foreach (var p in data.Take(3))
+                {
+                    _logger.LogInformation("   → {Sistema}/{Funcao}: '{Acoes}' ({Restric})",
+                        p.CdSistema, p.CdFuncao, p.CdAcoes, p.CdRestric);
+                }
+
+                // Salva na sessão
+                ctx.Session.SetString(SessionKey, JsonSerializer.Serialize(data));
+                return data;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "❌ Erro ao buscar permissões na API");
                 return Array.Empty<PermissionDto>();
             }
-
-            var envelope = await resp.Content.ReadFromJsonAsync<ApiBaseResponse<List<PermissionDto>>>(
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true }, ct);
-
-            var data = envelope?.Data ?? new List<PermissionDto>();
-
-            // normaliza (trim/upper) para facilitar comparação
-            foreach (var p in data)
-            {
-                p.CdSistema = (p.CdSistema ?? "").Trim().ToUpperInvariant();
-                p.CdFuncao = (p.CdFuncao ?? "").Trim().ToUpperInvariant();
-                p.CdAcoes = (p.CdAcoes ?? "").Trim().ToUpperInvariant();
-            }
-
-            // salva em sessão
-            ctx.Session.SetString(SessionKey, JsonSerializer.Serialize(data));
-
-            return data;
         }
 
         public async Task ReloadAsync(CancellationToken ct = default)
         {
             _httpCtx.HttpContext?.Session.Remove(SessionKey);
+            _logger.LogInformation("🔄 Cache de permissões limpo, recarregando...");
             await GetAsync(ct);
         }
 
@@ -111,8 +155,12 @@ namespace RhSensoWeb.Services.Security
         {
             var s = (sistema ?? "").Trim().ToUpperInvariant();
             var f = (funcao ?? "").Trim().ToUpperInvariant();
+
             var list = await GetAsync(ct);
-            return list.Any(p => p.CdSistema == s && p.CdFuncao == f);
+            var hasFeature = list.Any(p => p.CdSistema == s && p.CdFuncao == f);
+
+            _logger.LogInformation("🔍 HasFeature({Sistema}, {Funcao}) = {Result}", s, f, hasFeature);
+            return hasFeature;
         }
 
         public async Task<bool> HasActionAsync(string sistema, string funcao, char acao, CancellationToken ct = default)
@@ -122,11 +170,20 @@ namespace RhSensoWeb.Services.Security
             var a = char.ToUpperInvariant(acao);
 
             var list = await GetAsync(ct);
-            var p = list.FirstOrDefault(p => p.CdSistema == s && p.CdFuncao == f);
-            if (p is null) return false;
+            var permission = list.FirstOrDefault(p => p.CdSistema == s && p.CdFuncao == f);
 
-            // CdAcoes é uma string de letras (ex.: "ACEI"). Basta verificar se contém a letra pedida.
-            return !string.IsNullOrEmpty(p.CdAcoes) && p.CdAcoes.Contains(a);
+            if (permission is null)
+            {
+                _logger.LogInformation("🔍 HasAction({Sistema}, {Funcao}, {Acao}) = FALSE (permissão não encontrada)",
+                    s, f, a);
+                return false;
+            }
+
+            var hasAction = !string.IsNullOrEmpty(permission.CdAcoes) && permission.CdAcoes.Contains(a);
+            _logger.LogInformation("🔍 HasAction({Sistema}, {Funcao}, {Acao}) = {Result} (disponível: '{Acoes}')",
+                s, f, a, hasAction, permission.CdAcoes);
+
+            return hasAction;
         }
 
         public async Task<char> GetRestricaoAsync(string sistema, string funcao, CancellationToken ct = default)
@@ -135,14 +192,19 @@ namespace RhSensoWeb.Services.Security
             var f = (funcao ?? "").Trim().ToUpperInvariant();
             var list = await GetAsync(ct);
             var p = list.FirstOrDefault(p => p.CdSistema == s && p.CdFuncao == f);
-            return p?.CdRestric is char r && r != '\0' ? char.ToUpperInvariant(r) : 'N';
+            var result = p?.CdRestric is char r && r != '\0' ? char.ToUpperInvariant(r) : 'L';
+
+            _logger.LogInformation("🔍 GetRestricao({Sistema}, {Funcao}) = {Result}", s, f, result);
+            return result;
         }
 
-        // Usado pelos TagHelpers para garantir que o cache esteja populado.
         public async Task EnsureLoadedAsync(HttpContext http)
         {
             if (http.Session.GetString(SessionKey) is null)
+            {
+                _logger.LogInformation("🔄 Cache vazio, carregando permissões...");
                 await GetAsync();
+            }
         }
     }
 }

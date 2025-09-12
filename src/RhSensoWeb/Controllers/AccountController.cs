@@ -146,5 +146,19 @@ namespace RhSensoWeb.Controllers
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return RedirectToAction(nameof(Login));
         }
+
+        // Adicione esta action no seu AccountController existente:
+
+        [HttpGet]
+        public IActionResult AccessDenied(string? sistema, string? funcao, string? acoes, string? returnUrl)
+        {
+            ViewBag.Sistema = sistema ?? "Desconhecido";
+            ViewBag.Funcao = funcao ?? "Desconhecida";
+            ViewBag.Acoes = acoes ?? "Nenhuma";
+            ViewBag.ReturnUrl = returnUrl;
+
+            return View();
+        }
+
     }
 }
