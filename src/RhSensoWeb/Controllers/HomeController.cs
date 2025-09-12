@@ -1,10 +1,13 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using RhSensoWeb.Models;
 using System.Diagnostics;
 using System.Net.Http.Headers;
+// using System.Net.Http.Headers; // se não for usar Accept, pode remover
 
 namespace RhSensoWeb.Controllers
 {
+    // [Authorize] // opcional: descomente se quiser exigir login na Home
     public class HomeController : Controller
     {
         private readonly ILogger<HomeController> _logger;
@@ -16,8 +19,10 @@ namespace RhSensoWeb.Controllers
             _http = http;
         }
 
+        [HttpGet]
         public IActionResult Index() => View();
 
+        [HttpGet]
         public IActionResult Privacy() => View();
 
         [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
@@ -27,7 +32,7 @@ namespace RhSensoWeb.Controllers
         }
 
         // -----------------------------
-        // Testes r�pidos da API
+        // Testes rápidos da API
         // -----------------------------
 
         // GET /ping-api  -> chama /health da sua API
@@ -36,7 +41,10 @@ namespace RhSensoWeb.Controllers
         {
             try
             {
-                var client = _http.CreateClient("RhApi"); // baseUrl vem do appsettings
+                // ✅ usar o client nomeado "Api" (conforme Program.cs)
+                var client = _http.CreateClient("Api");
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
                 var resp = await client.GetAsync("health");
                 var body = await resp.Content.ReadAsStringAsync();
 
@@ -56,7 +64,10 @@ namespace RhSensoWeb.Controllers
         {
             try
             {
-                var client = _http.CreateClient("RhApi");
+                // ✅ idem: usar "Api"
+                var client = _http.CreateClient("Api");
+                client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+
                 var resp = await client.GetAsync("health/ready");
                 var body = await resp.Content.ReadAsStringAsync();
 
@@ -69,5 +80,14 @@ namespace RhSensoWeb.Controllers
                 return StatusCode(500, "Falha ao chamar a API (/health/ready). Veja os logs.");
             }
         }
+
+        // cole temporariamente no HomeController para testar:
+        [HttpGet("/debug/perms1")]
+        public async Task<IActionResult> DebugPerms1([FromServices] RhSensoWeb.Services.Security.IPermissionProvider prov)
+        {
+            var list = await prov.GetAsync();
+            return Content($"Permissões carregadas: {list.Count}", "text/plain");
+        }
+
     }
 }

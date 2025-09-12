@@ -12,4 +12,8 @@
   <ItemGroup>
     <ProjectReference Include="..\RhSenso.Shared\RhSenso.Shared.csproj" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Folder Include="Filters\" />
+  </ItemGroup>
 </Project>

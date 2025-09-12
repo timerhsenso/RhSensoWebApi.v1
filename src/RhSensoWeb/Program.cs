@@ -3,6 +3,7 @@
 // Compatível com Polly v8 via Microsoft.Extensions.Http.Resilience
 // -----------------------------------------------------------------------------
 
+using System; // <- necessário para TimeSpan
 using System.Net.Http;
 using System.Net.Http.Headers;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -12,6 +13,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Http.Resilience; // ✅ pacote novo (Resilience Handler)
+using RhSensoWeb.Services.Security; // ✅ para PermissionProvider (& afins)
 
 namespace RhSensoWeb
 {
@@ -21,9 +23,9 @@ namespace RhSensoWeb
         {
             var builder = WebApplication.CreateBuilder(args);
 
-            // ===============================================================
-            // MVC + Razor + JSON (camelCase; ignora nulls)
-            // ===============================================================
+            // ---------------------------------------------------------------
+            // Services
+            // ---------------------------------------------------------------
             builder.Services.AddControllersWithViews();
             builder.Services.ConfigureHttpJsonOptions(o =>
             {
@@ -31,11 +33,7 @@ namespace RhSensoWeb
                 o.SerializerOptions.DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull;
             });
 
-            // ===============================================================
-            // Sessão + Cache + HttpContextAccessor
-            // ===============================================================
             builder.Services.AddHttpContextAccessor();
-
             builder.Services.AddDistributedMemoryCache();
             builder.Services.AddSession(o =>
             {
@@ -44,9 +42,6 @@ namespace RhSensoWeb
                 o.Cookie.IsEssential = true;
             });
 
-            // ===============================================================
-            // Autenticação por Cookie (UI) + Autorização
-            // ===============================================================
             builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
                 .AddCookie(options =>
                 {
@@ -60,28 +55,21 @@ namespace RhSensoWeb
 
             builder.Services.AddAuthorization();
 
-            // ===============================================================
-            // Anti-forgery (para POST/DELETE via formulário)
-            // ===============================================================
             builder.Services.AddAntiforgery(options =>
             {
                 options.Cookie.Name = ".RhSensoWeb.Antiforgery";
                 options.HeaderName = "RequestVerificationToken";
             });
 
-            // ===============================================================
-            // URL base da API (obrigatória) - appsettings: "Api": { "BaseUrl": "https://localhost:7051/" }
-            // ===============================================================
+            // **Permissões** (serviço usado pelas TagHelpers)
+            builder.Services.AddScoped<IPermissionProvider, PermissionProvider>();
+
+            // API base URL (appsettings Api:BaseUrl)
             var apiBaseUrl = builder.Configuration["Api:BaseUrl"]
                 ?? throw new InvalidOperationException("Configure 'Api:BaseUrl' em appsettings.*");
             if (!apiBaseUrl.EndsWith("/")) apiBaseUrl += "/";
 
-            // ===============================================================
-            // HttpClient "Api"
-            // - AuthTokenHandler: lê cookie/sessão "AuthToken" e injeta "Authorization: Bearer {token}"
-            // - AddStandardResilienceHandler: retry/circuit-breaker/timeout (defaults seguros)
-            //   ⚠️ NÃO usar AddPolicyHandler (API antiga do Polly)
-            // ===============================================================
+            // HttpClient "Api" com AuthTokenHandler e Resilience padrão
             builder.Services.AddTransient<AuthTokenHandler>();
 
             builder.Services.AddHttpClient("Api", client =>
@@ -91,24 +79,25 @@ namespace RhSensoWeb
                 client.Timeout = TimeSpan.FromSeconds(30);
             })
             .AddHttpMessageHandler<AuthTokenHandler>()
-            .AddStandardResilienceHandler(); // ✅ substitui AddPolicyHandler
+            .AddStandardResilienceHandler(); // ✅ substitui AddPolicyHandler (Polly v8)
 
-            // ===============================================================
-            // Logging
-            // ===============================================================
             builder.Logging.AddConsole();
 
+            // ---------------------------------------------------------------
+            // Pipeline
+            // ---------------------------------------------------------------
             var app = builder.Build();
 
             app.Logger.LogInformation("➡ API Base URL: {Url}", apiBaseUrl);
 
-            // ===============================================================
-            // Pipeline HTTP
-            // ===============================================================
             if (!app.Environment.IsDevelopment())
             {
                 app.UseExceptionHandler("/Home/Error");
                 app.UseHsts();
+            }
+            else
+            {
+                app.UseDeveloperExceptionPage(); // útil em Development
             }
 
             app.UseHttpsRedirection();
@@ -116,13 +105,10 @@ namespace RhSensoWeb
 
             app.UseRouting();
 
-            app.UseAuthentication(); // cookie UI
-            app.UseSession();        // estado por sessão
+            app.UseAuthentication();
+            app.UseSession();        // precisa antes dos endpoints
             app.UseAuthorization();
 
-            // ===============================================================
-            // Rotas (com Áreas)
-            // ===============================================================
             app.MapControllerRoute(
                 name: "areas",
                 pattern: "{area:exists}/{controller=Home}/{action=Index}/{id?}");
@@ -140,7 +126,8 @@ namespace RhSensoWeb
     // ==========================================================================
 
     /// <summary>
-    /// Lê o token do cookie/sessão e injeta Authorization: Bearer {token} nas chamadas à API.
+    /// Injeta Authorization: Bearer {token} nas chamadas à API.
+    /// Agora PRIORIZA a Session. Mantém leitura do cookie apenas como fallback.
     /// </summary>
     internal sealed class AuthTokenHandler : DelegatingHandler
     {
@@ -150,7 +137,14 @@ namespace RhSensoWeb
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
         {
             var ctx = _http.HttpContext;
-            var token = ctx?.Request.Cookies["AuthToken"] ?? ctx?.Session.GetString("AuthToken");
+
+            // 1) Session (server-side)
+            var token = ctx?.Session.GetString("AuthToken");
+
+            // 2) (fallback) cookie legado
+            if (string.IsNullOrWhiteSpace(token))
+                token = ctx?.Request.Cookies["AuthToken"];
+
             if (!string.IsNullOrWhiteSpace(token))
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 

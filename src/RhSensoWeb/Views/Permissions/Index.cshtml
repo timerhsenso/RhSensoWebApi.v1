@@ -1,0 +1,95 @@
+﻿@model List<RhSensoWeb.ViewModels.Permissions.PermissionViewModel>
+@{
+    ViewData["Title"] = "Minhas Permissões";
+}
+
+
+<div class="mt-3 d-flex gap-2">
+    <!-- Deve APARECER: você tem C em RHU_FM_PFERIAS (pela sua lista) -->
+    <a class="btn btn-primary"
+       app-when-allowed
+       app-sistema="RHU"
+       app-funcao="RHU_FM_PPRA_ESOCIAL"
+       app-acao="C">
+        Criar Férias
+    </a>
+
+    <!-- Deve SUMIR se não tiver ação E -->
+    <a class="btn btn-warning"
+       app-when-allowed
+       app-sistema="RHU"
+       app-funcao="RHU_FM_PPRA_ESOCIAL"
+       app-acao="Z">
+        <!-- usei Z de propósito para sumir -->
+        Botão Invisível (teste)
+    </a>
+
+    <!-- Só checa se existe a função (sem ação) -->
+    <a class="btn btn-outline-secondary"
+       app-when-allowed
+       app-sistema="RHU"
+       app-funcao="RHU_FM_PPRA_ESOCIAL">
+        Abrir Tela de Férias
+    </a>
+</div>
+
+
+<!-- some se não puder -->
+<a class="btn btn-primary"
+   app-when-allowed app-sistema="RHU" app-funcao="RHU_FM_PFERIAS" app-acao="C">
+    Criar Férias
+</a>
+
+<!-- fica visível, mas desabilita se não tiver I -->
+<button type="button" class="btn btn-outline-secondary"
+        app-disable-when-denied app-sistema="RHU" app-funcao="RHU_FM_PPRA_ESOCIAL" app-acao="I">
+    Importar
+</button>
+
+
+<section class="container mt-4">
+    <h2 class="mb-3">Minhas Permissões</h2>
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger">@TempData["Error"]</div>
+    }
+
+    @if (Model?.Any() != true)
+    {
+        <div class="alert alert-info">Nenhuma permissão encontrada para o seu usuário.</div>
+    }
+    else
+    {
+        <div class="table-responsive">
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>Sistema</th>
+                        <th>Descrição</th>
+                        <th>Função</th>
+                        <th>Permissão</th>
+                        <th>Ações (ACEI)</th>
+                        <th>Restrição</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var p in Model)
+                    {
+                        <tr>
+                            <td><strong>@p.CdSistema</strong></td>
+                            <td>@p.DcSistema</td>
+                            <td>@p.CdFuncao</td>
+                            <td>
+                                <div>@p.PermissionCode</div>
+                                <small class="text-muted">@p.PermissionName</small>
+                            </td>
+                            <td>@p.CdAcoes</td>
+                            <td>@p.CdRestric</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

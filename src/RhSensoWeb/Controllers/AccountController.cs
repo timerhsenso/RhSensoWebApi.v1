@@ -61,7 +61,7 @@ namespace RhSensoWeb.Controllers
                 var client = _httpClientFactory.CreateClient("Api");
                 client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
 
-                // Envia EXATAMENTE o que a API espera
+                // Envia exatamente o payload esperado pela API
                 var payload = new LoginRequestDto
                 {
                     CdUsuario = model.UserName!.Trim(),
@@ -100,20 +100,11 @@ namespace RhSensoWeb.Controllers
                     return View(model);
                 }
 
-                // Cookie do token para o AuthTokenHandler
-                var cookieExp = model.RememberMe
-                    ? DateTimeOffset.UtcNow.AddDays(7)
-                    : DateTimeOffset.UtcNow.AddSeconds(expires);
+                // Guarda o JWT na sessão (server-side) — evita cookie gigante
+                HttpContext.Session.SetString("AuthToken", token);
+                _logger.LogInformation("Token armazenado na sessão (len={Len}).", token.Length);
 
-                Response.Cookies.Append("AuthToken", token, new CookieOptions
-                {
-                    HttpOnly = true,
-                    Secure = Request.IsHttps,
-                    SameSite = SameSiteMode.Lax,
-                    Expires = cookieExp
-                });
-
-                // (Opcional) Cookie de autenticação local com nome
+                // Cookie de autenticação local (pequeno)
                 await HttpContext.SignInAsync(
                     CookieAuthenticationDefaults.AuthenticationScheme,
                     new System.Security.Claims.ClaimsPrincipal(
@@ -121,12 +112,19 @@ namespace RhSensoWeb.Controllers
                             new[] { new System.Security.Claims.Claim("name", model.UserName!) },
                             CookieAuthenticationDefaults.AuthenticationScheme
                         )
-                    )
+                    ),
+                    new AuthenticationProperties
+                    {
+                        IsPersistent = model.RememberMe,
+                        ExpiresUtc = model.RememberMe
+                            ? DateTimeOffset.UtcNow.AddDays(7)
+                            : DateTimeOffset.UtcNow.AddSeconds(expires)
+                    }
                 );
 
                 // Redireciona para ReturnUrl (se local), senão Home
                 if (!string.IsNullOrWhiteSpace(model.ReturnUrl) && Url.IsLocalUrl(model.ReturnUrl))
-                    return Redirect(model.ReturnUrl);
+                    return LocalRedirect(model.ReturnUrl);
 
                 return RedirectToAction("Index", "Home");
             }
@@ -142,6 +140,8 @@ namespace RhSensoWeb.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Logout()
         {
+            // limpa sessão e cookie local (legado)
+            HttpContext.Session.Remove("AuthToken");
             Response.Cookies.Delete("AuthToken");
             await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
             return RedirectToAction(nameof(Login));

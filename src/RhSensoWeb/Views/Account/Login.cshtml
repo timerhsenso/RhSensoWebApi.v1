@@ -1,41 +1,46 @@
-@* src/RhSensoWeb/Views/Account/Login.cshtml *@
 @model RhSensoWeb.ViewModels.Account.LoginViewModel
 @{
-    ViewData["Title"] = "Login";
+    ViewData["Title"] = "Entrar";
 }
 
-<h1>Login</h1>
+<div class="row justify-content-center">
+    <div class="col-md-5">
+        <div class="card shadow-sm mt-4">
+            <div class="card-body">
+                <h1 class="h4 mb-3">Entrar</h1>
 
-@if (!string.IsNullOrWhiteSpace(Model?.Error))
-{
-    <div class="alert alert-danger" role="alert">@Model.Error</div>
-}
+                @if (!string.IsNullOrWhiteSpace(Model?.Error))
+                {
+                    <div class="alert alert-danger">@Model.Error</div>
+                }
 
-<form asp-action="Login" method="post">
-    @Html.AntiForgeryToken()
+                <form asp-action="Login" method="post" novalidate>
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" asp-for="ReturnUrl" />
 
-    @* mantém ReturnUrl quando o login veio de uma página protegida *@
-    <input type="hidden" asp-for="ReturnUrl" />
+                    <div class="mb-3">
+                        <label asp-for="UserName" class="form-label"></label>
+                        <input asp-for="UserName" class="form-control" value="ABC"  autofocus />
+                        <span asp-validation-for="UserName" class="text-danger"></span>
+                    </div>
 
-    <div class="mb-3">
-        <label asp-for="UserName" class="form-label"></label>
-        <input asp-for="UserName" class="form-control" autocomplete="username" />
-        <span asp-validation-for="UserName" class="text-danger"></span>
+                    <div class="mb-3">
+                        <label asp-for="Password" class="form-label"></label>
+                        <input asp-for="Password" class="form-control" type="password" value="ABC"/>
+                        <span asp-validation-for="Password" class="text-danger"></span>
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" asp-for="RememberMe" />
+                        <label class="form-check-label" asp-for="RememberMe"></label>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100">Entrar</button>
+                </form>
+            </div>
+        </div>
     </div>
-
-    <div class="mb-3">
-        <label asp-for="Password" class="form-label"></label>
-        <input asp-for="Password" class="form-control" autocomplete="current-password" />
-        <span asp-validation-for="Password" class="text-danger"></span>
-    </div>
-
-    <div class="form-check mb-3">
-        <input class="form-check-input" asp-for="RememberMe" />
-        <label class="form-check-label" asp-for="RememberMe"></label>
-    </div>
-
-    <button type="submit" class="btn btn-primary">Entrar</button>
-</form>
+</div>
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
